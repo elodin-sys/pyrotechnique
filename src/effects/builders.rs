@@ -38,13 +38,16 @@ fn init_random_modulation(
     SetAttributeModifier::new(Attribute::COLOR, rgba.expr())
 }
 
-/// All built-in effects: (file stem, builder).
-pub fn builtin_effects() -> Vec<(&'static str, EffectAsset)> {
+/// All built-in effects: (project, file stem, builder).
+pub fn builtin_effects() -> Vec<(&'static str, &'static str, EffectAsset)> {
     vec![
-        ("merlin_core", merlin_core()),
-        ("merlin_flame", merlin_flame()),
-        ("exhaust_smoke", exhaust_smoke()),
-        ("pad_smoke", pad_smoke()),
+        ("falcon9", "merlin_core", merlin_core()),
+        ("falcon9", "merlin_flame", merlin_flame()),
+        ("falcon9", "exhaust_smoke", exhaust_smoke()),
+        ("falcon9", "pad_smoke", pad_smoke()),
+        ("apollo-lander", "descent_plume", descent_plume()),
+        ("apollo-lander", "rcs_puff", rcs_puff()),
+        ("apollo-lander", "ground_dust", ground_dust()),
     ]
 }
 
@@ -53,17 +56,18 @@ pub fn generate(args: &GenEffectsArgs) -> anyhow::Result<()> {
     register_modifiers(&type_registry);
     let registry = type_registry.read();
 
-    std::fs::create_dir_all(&args.out_dir)?;
-    for (name, effect) in builtin_effects() {
+    for (project, name, effect) in builtin_effects() {
+        let dir = args.out_dir.join(project);
+        std::fs::create_dir_all(&dir)?;
         let text = effect
             .serialize(&registry)
-            .map_err(|e| anyhow::anyhow!("serializing {name}: {e}"))?;
-        let path = args.out_dir.join(format!("{name}.effect"));
+            .map_err(|e| anyhow::anyhow!("serializing {project}/{name}: {e}"))?;
+        let path = dir.join(format!("{name}.effect"));
         std::fs::write(&path, text)?;
         println!("wrote {}", path.display());
     }
 
-    // Sprite textures live next to the effects, under assets/textures.
+    // Sprite textures are shared by all projects, under assets/textures.
     let tex_dir = args
         .out_dir
         .parent()
@@ -358,6 +362,226 @@ fn exhaust_smoke() -> EffectAsset {
         .render(ParticleTextureModifier {
             texture_slot: smoke_slot,
             sample_mapping: ImageSampleMapping::Modulate,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        // Modulate: gradient x per-particle random COLOR from init.
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Modulate,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+// ---------------------------------------------------------------------------
+// apollo-lander effects
+// ---------------------------------------------------------------------------
+
+/// LM descent engine plume in vacuum: a short, translucent straw-colored
+/// column that expands quickly (no atmosphere to confine it) and fades to a
+/// faint shimmer — see the "First Man" close-up and the Apollo 12 sim targets.
+fn descent_plume() -> EffectAsset {
+    let writer = ExprWriter::new();
+
+    // Nozzle exit disc (DPS bell exit is ~1.5 m across).
+    let init_pos = SetPositionCone3dModifier {
+        height: writer.lit(0.3).expr(),
+        base_radius: writer.lit(0.55).expr(),
+        top_radius: writer.lit(0.4).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+
+    // Diverging cone from a virtual center just above the nozzle; vacuum
+    // plumes spread wider than sea-level ones.
+    let init_vel = SetVelocitySphereModifier {
+        center: writer.lit(Vec3::new(0.0, 1.6, 0.0)).expr(),
+        speed: writer.lit(24.0).uniform(writer.lit(42.0)).expr(),
+    };
+
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    let lifetime = writer.lit(0.05).uniform(writer.lit(0.13)).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    // Pale straw core cooling to a translucent gray-white haze.
+    let mut color = Gradient::new();
+    color.add_key(0.0, Vec4::new(11.0, 8.5, 5.6, 0.7));
+    color.add_key(0.35, Vec4::new(5.5, 4.4, 3.2, 0.4));
+    color.add_key(0.7, Vec4::new(2.2, 2.0, 1.7, 0.16));
+    color.add_key(1.0, Vec4::new(1.1, 1.05, 1.0, 0.0));
+
+    // Thick relative to length so overlapping sprites fuse into a smooth
+    // column instead of reading as individual sparks.
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::new(1.4, 0.7, 0.7));
+    size.add_key(0.4, Vec3::new(2.4, 1.1, 1.1));
+    size.add_key(1.0, Vec3::new(1.8, 0.9, 0.9));
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(16384, SpawnerSettings::rate(3600.0.into()), module)
+        .with_name("descent_plume")
+        .with_simulation_space(SimulationSpace::Local)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_age)
+        .init(init_lifetime)
+        .render(OrientModifier::new(OrientMode::AlongVelocity))
+        .render(ParticleTextureModifier {
+            texture_slot: mask_slot,
+            sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Overwrite,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+/// RCS quad puff: a small, sharp white-blue dart. Fired in short pulses via
+/// the emitter's `activity` keyframes in the scene.
+fn rcs_puff() -> EffectAsset {
+    let writer = ExprWriter::new();
+
+    let init_pos = SetPositionCone3dModifier {
+        height: writer.lit(0.08).expr(),
+        base_radius: writer.lit(0.06).expr(),
+        top_radius: writer.lit(0.05).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+
+    let init_vel = SetVelocitySphereModifier {
+        center: writer.lit(Vec3::new(0.0, 0.5, 0.0)).expr(),
+        speed: writer.lit(9.0).uniform(writer.lit(16.0)).expr(),
+    };
+
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    let lifetime = writer.lit(0.08).uniform(writer.lit(0.28)).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    // Cold-gas white with a blue cast, vanishing quickly.
+    let mut color = Gradient::new();
+    color.add_key(0.0, Vec4::new(9.0, 10.0, 12.5, 0.9));
+    color.add_key(0.35, Vec4::new(4.5, 5.2, 7.0, 0.5));
+    color.add_key(1.0, Vec4::new(1.2, 1.4, 2.0, 0.0));
+
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::new(0.55, 0.16, 0.16));
+    size.add_key(0.4, Vec3::new(1.1, 0.3, 0.3));
+    size.add_key(1.0, Vec3::new(0.8, 0.22, 0.22));
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(4096, SpawnerSettings::rate(600.0.into()), module)
+        .with_name("rcs_puff")
+        .with_simulation_space(SimulationSpace::Local)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_age)
+        .init(init_lifetime)
+        .render(OrientModifier::new(OrientMode::AlongVelocity))
+        .render(ParticleTextureModifier {
+            texture_slot: mask_slot,
+            sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Overwrite,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+/// Lunar regolith blast: no air, so dust doesn't billow — it sprays outward
+/// in a flat ballistic sheet of streaks hugging the surface, arcing back
+/// down under lunar gravity. World-space, attached to the landing site.
+fn ground_dust() -> EffectAsset {
+    let writer = ExprWriter::new();
+
+    // Ring just above the surface under the engine.
+    let init_pos = SetPositionCircleModifier {
+        center: writer.lit(Vec3::new(0.0, 0.12, 0.0)).expr(),
+        axis: writer.lit(Vec3::Y).expr(),
+        radius: writer.lit(1.4).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+
+    // Flat radial spray, fast: entrained grains leave at tens of m/s.
+    let init_vel = SetVelocityCircleModifier {
+        center: writer.lit(Vec3::ZERO).expr(),
+        axis: writer.lit(Vec3::Y).expr(),
+        speed: writer.lit(7.0).uniform(writer.lit(22.0)).expr(),
+    };
+
+    // Small random upward component so the sheet has a little thickness.
+    let up_kick = writer.rand(ScalarType::Float) * writer.lit(1.6);
+    let kicked = writer.attr(Attribute::VELOCITY)
+        + writer.lit(0.0).vec3(up_kick, writer.lit(0.0));
+    let init_up_kick = SetAttributeModifier::new(Attribute::VELOCITY, kicked.expr());
+
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    let lifetime = writer.lit(0.5).uniform(writer.lit(1.3)).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    // Grain-to-grain brightness variation reads as streaky spray.
+    let init_modulation = init_random_modulation(&writer, 0.55, 1.0, 0.3, 1.0);
+
+    // Lunar gravity only — no drag in vacuum.
+    let gravity = AccelModifier::new(writer.lit(Vec3::new(0.0, -1.62, 0.0)).expr());
+
+    // Kill grains that fall back through the surface.
+    let kill_ground = KillAabbModifier::new(
+        writer.lit(Vec3::new(0.0, -1000.0, 0.0)).expr(),
+        writer.lit(Vec3::new(1.0e6, 1000.0, 1.0e6)).expr(),
+    )
+    .with_kill_inside(true);
+
+    // Sunlit gray regolith; alpha carries the look (reflective, not emissive).
+    let mut color = Gradient::new();
+    color.add_key(0.0, Vec4::new(1.5, 1.42, 1.3, 0.4));
+    color.add_key(0.4, Vec4::new(1.3, 1.24, 1.15, 0.28));
+    color.add_key(1.0, Vec4::new(1.1, 1.06, 1.0, 0.0));
+
+    // Stretched along velocity: fine streaks, not puffs.
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::new(1.0, 0.14, 0.14));
+    size.add_key(0.4, Vec3::new(2.2, 0.3, 0.3));
+    size.add_key(1.0, Vec3::new(3.2, 0.45, 0.45));
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(32768, SpawnerSettings::rate(4000.0.into()), module)
+        .with_name("ground_dust")
+        .with_simulation_space(SimulationSpace::Global)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Blend)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_up_kick)
+        .init(init_age)
+        .init(init_lifetime)
+        .init(init_modulation)
+        .update(gravity)
+        .update(kill_ground)
+        .render(OrientModifier::new(OrientMode::AlongVelocity))
+        .render(ParticleTextureModifier {
+            texture_slot: mask_slot,
+            sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
             gradient: size,

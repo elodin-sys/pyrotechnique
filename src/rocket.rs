@@ -40,12 +40,21 @@ pub struct RocketPlugin;
 impl Plugin for RocketPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RocketBounds>()
-            .add_systems(Startup, spawn_rocket)
-            .add_systems(Update, normalize_rocket);
+            .add_systems(Update, (ensure_rocket, normalize_rocket));
     }
 }
 
-fn spawn_rocket(mut commands: Commands, scene: Res<SceneConfig>, asset_server: Res<AssetServer>) {
+/// Spawns the rocket from the current scene whenever none exists (first boot,
+/// or after a project switch despawned it).
+fn ensure_rocket(
+    mut commands: Commands,
+    scene: Res<SceneConfig>,
+    asset_server: Res<AssetServer>,
+    existing: Query<(), With<RocketRoot>>,
+) {
+    if !existing.is_empty() {
+        return;
+    }
     let world_handle: Handle<WorldAsset> =
         asset_server.load(GltfAssetLabel::Scene(0).from_asset(scene.model.path.clone()));
     commands

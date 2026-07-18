@@ -1,24 +1,26 @@
 //! Editor UI: egui panels around the 3D viewport.
 //!
 //! Layout:
-//! - Top bar: playback (play/pause/restart/speed/scrub), scenario + camera
-//!   presets, screenshot, gizmo toggle.
+//! - Top bar: project picker, playback (play/pause/restart/speed/scrub),
+//!   scenario + camera presets, screenshot, gizmo toggle.
 //! - Left panel: emitter list, reference image overlay controls.
 //! - Right panel: inspector for the selected emitter's effect asset —
-//!   spawner, alpha mode, HDR color gradient, size gradient — with save /
-//!   revert to the `.effect` file.
+//!   spawner, alpha mode, HDR color gradient, size gradient.
 //!
 //! Live edits mutate the `EffectAsset` in place (which recompiles the GPU
-//! effect); Save serializes the canonical Hanabi RON back to disk. External
-//! file edits hot-reload and refresh the inspector.
+//! effect) and auto-save: the canonical Hanabi RON is written back to the
+//! `.effect` file once edits settle (`AUTOSAVE_DEBOUNCE`), and flushed on
+//! project switch and app exit. External file edits hot-reload and refresh
+//! the inspector.
 
 // egui 0.35 deprecated the SidePanel/TopBottomPanel context API in favor of
 // Ui-scoped `Panel`; the old API still works and keeps this file simple.
 #![allow(deprecated)]
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::time::Instant;
 
+use bevy::app::AppExit;
 use bevy::camera::Exposure;
 use bevy::ecs::reflect::AppTypeRegistry;
 use bevy::ecs::system::SystemParam;
@@ -34,8 +36,12 @@ use bevy_panorbit_camera::PanOrbitCamera;
 
 use crate::app::SimClock;
 use crate::effects::{Emitter, ShowEmitterGizmos};
+use crate::project::{discover_projects, LoadProject, Project, ProjectStatus};
 use crate::render::MainCamera;
 use crate::scene::{CameraPreset, SceneConfig};
+
+/// Seconds of edit inactivity before a dirty effect is written to disk.
+const AUTOSAVE_DEBOUNCE: f32 = 0.6;
 
 pub struct EditorUiPlugin;
 
@@ -44,7 +50,8 @@ impl Plugin for EditorUiPlugin {
         app.add_plugins(EguiPlugin::default())
             .init_resource::<UiState>()
             .add_systems(EguiPrimaryContextPass, ui_system)
-            .add_systems(Update, invalidate_on_external_reload);
+            .add_systems(Update, invalidate_on_external_reload)
+            .add_systems(Last, flush_saves_on_exit);
     }
 }
 
@@ -57,10 +64,21 @@ struct EffectEditModel {
     size_keys: Option<Vec<(f32, Vec3)>>,
 }
 
+/// An effect with unsaved UI edits, pending auto-save.
+struct DirtyEffect {
+    /// Asset-relative `.effect` path.
+    path: String,
+    last_edit: Instant,
+}
+
 #[derive(Resource, Default)]
 pub struct UiState {
     selected: usize,
     models: HashMap<AssetId<EffectAsset>, EffectEditModel>,
+    dirty: HashMap<AssetId<EffectAsset>, DirtyEffect>,
+    /// Project name as of last frame; a change means a project was (re)loaded
+    /// and per-project UI caches must reset.
+    last_project: String,
     /// Frame counter at the time of our last programmatic asset mutation,
     /// used to distinguish our own Modified events from external file edits.
     last_apply_frame: u32,
@@ -78,6 +96,9 @@ struct UiParams<'w, 's> {
     ui_state: ResMut<'w, UiState>,
     clock: ResMut<'w, SimClock>,
     scene: Res<'w, SceneConfig>,
+    project: Res<'w, Project>,
+    project_status: ResMut<'w, ProjectStatus>,
+    load_project: MessageWriter<'w, LoadProject>,
     effects: ResMut<'w, Assets<EffectAsset>>,
     registry: Res<'w, AppTypeRegistry>,
     gizmos: ResMut<'w, ShowEmitterGizmos>,
@@ -98,12 +119,69 @@ fn ui_system(mut contexts: EguiContexts, mut p: UiParams) -> Result {
     let ctx = contexts.ctx_mut()?;
     p.ui_state.frame = p.ui_state.frame.wrapping_add(1);
 
+    // A project was opened (from the picker or CLI): reset per-project caches.
+    if p.ui_state.last_project != p.project.name {
+        p.ui_state.last_project = p.project.name.clone();
+        p.ui_state.selected = 0;
+        p.ui_state.models.clear();
+        p.ui_state.dirty.clear();
+        p.ui_state.reference_scenario = None;
+        p.ui_state.reference_texture = None;
+        p.ui_state.show_reference = false;
+    }
+    if let Some(message) = p.project_status.0.take() {
+        p.ui_state.status = message;
+    }
+
     top_bar(ctx, &mut p);
     left_panel(ctx, &mut p);
     right_panel(ctx, &mut p);
     reference_overlay(ctx, &mut p);
 
+    autosave_pending(&mut p, false);
+
     Ok(())
+}
+
+/// Writes dirty effects whose edits have settled (or all of them, if
+/// `force`) back to their `.effect` files.
+fn autosave_pending(p: &mut UiParams, force: bool) {
+    let due: Vec<AssetId<EffectAsset>> = p
+        .ui_state
+        .dirty
+        .iter()
+        .filter(|(_, dirty)| {
+            force || dirty.last_edit.elapsed().as_secs_f32() >= AUTOSAVE_DEBOUNCE
+        })
+        .map(|(id, _)| *id)
+        .collect();
+    for id in due {
+        let Some(dirty) = p.ui_state.dirty.remove(&id) else {
+            continue;
+        };
+        match save_effect_file(&p.effects, &p.registry, id, &dirty.path) {
+            Ok(path) => p.ui_state.status = format!("auto-saved {path}"),
+            Err(e) => p.ui_state.status = format!("auto-save failed for {}: {e}", dirty.path),
+        }
+    }
+}
+
+/// Last-chance flush when the app is quitting (window closed mid-debounce).
+fn flush_saves_on_exit(
+    mut exits: MessageReader<AppExit>,
+    mut ui_state: ResMut<UiState>,
+    effects: Res<Assets<EffectAsset>>,
+    registry: Res<AppTypeRegistry>,
+) {
+    if exits.read().next().is_none() {
+        return;
+    }
+    let pending: Vec<(AssetId<EffectAsset>, DirtyEffect)> = ui_state.dirty.drain().collect();
+    for (id, dirty) in pending {
+        if let Err(e) = save_effect_file(&effects, &registry, id, &dirty.path) {
+            error!("exit auto-save failed for {}: {e}", dirty.path);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -113,6 +191,30 @@ fn ui_system(mut contexts: EguiContexts, mut p: UiParams) -> Result {
 fn top_bar(ctx: &mut egui::Context, p: &mut UiParams) {
     egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
         ui.horizontal(|ui| {
+            // Project picker. Selecting the open project re-reads it from
+            // disk (useful after external scene edits).
+            let current_project = p.project.name.clone();
+            let mut chosen_project: Option<String> = None;
+            egui::ComboBox::from_label("project")
+                .selected_text(current_project.clone())
+                .show_ui(ui, |ui| {
+                    for name in discover_projects() {
+                        if ui
+                            .selectable_label(name == current_project, &name)
+                            .clicked()
+                        {
+                            chosen_project = Some(name);
+                        }
+                    }
+                });
+            if let Some(name) = chosen_project {
+                // Don't lose pending edits when the world is torn down.
+                autosave_pending(p, true);
+                p.load_project.write(LoadProject(name));
+            }
+
+            ui.separator();
+
             let play_label = if p.clock.playing { "Pause" } else { "Play" };
             if ui.button(play_label).clicked() {
                 p.clock.playing = !p.clock.playing;
@@ -178,14 +280,15 @@ fn top_bar(ctx: &mut egui::Context, p: &mut UiParams) {
 
             ui.separator();
             if ui.button("Screenshot").clicked() {
-                let path = PathBuf::from(format!(
-                    "shots/edit_{}.png",
+                let dir = p.project.shots_dir();
+                let path = dir.join(format!(
+                    "edit_{}.png",
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_secs())
                         .unwrap_or(0)
                 ));
-                let _ = std::fs::create_dir_all("shots");
+                let _ = std::fs::create_dir_all(&dir);
                 p.ui_state.status = format!("saved {}", path.display());
                 p.commands
                     .spawn(Screenshot::primary_window())
@@ -221,20 +324,10 @@ fn apply_scenario(p: &mut UiParams, name: &str) {
 
 fn snap_camera(p: &mut UiParams, preset: &CameraPreset) {
     let (rocket_pos, _) = p.scene.flight.sample(p.clock.t);
-    let (pos, look_at) = crate::capture::preset_pose(preset, rocket_pos);
     let Ok((mut orbit, mut projection, _)) = p.camera.single_mut() else {
         return;
     };
-    let offset = pos - look_at;
-    let radius = offset.length().max(0.01);
-    orbit.target_focus = look_at;
-    orbit.target_radius = radius;
-    orbit.target_yaw = f32::atan2(offset.x, offset.z);
-    orbit.target_pitch = (offset.y / radius).clamp(-1.0, 1.0).asin();
-    *projection = Projection::Perspective(PerspectiveProjection {
-        fov: preset.fov_deg.to_radians(),
-        ..default()
-    });
+    crate::render::snap_orbit_to_preset(&mut orbit, &mut projection, preset, rocket_pos);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,17 +340,21 @@ fn left_panel(ctx: &mut egui::Context, p: &mut UiParams) {
         .show(ctx, |ui| {
             ui.heading("Emitters");
             ui.separator();
+            // `.get` guards: emitter entities and the scene resource can be
+            // one frame out of sync while a project switch tears down.
             let mut ordered: Vec<(usize, String, String)> = p
                 .emitters
                 .iter()
-                .map(|(_, emitter, _)| {
-                    let config = &p.scene.emitters[emitter.index];
-                    (emitter.index, config.name.clone(), config.effect.clone())
+                .filter_map(|(_, emitter, _)| {
+                    let config = p.scene.emitters.get(emitter.index)?;
+                    Some((emitter.index, config.name.clone(), config.effect.clone()))
                 })
                 .collect();
             ordered.sort_by_key(|(index, _, _)| *index);
             for (index, name, effect_path) in ordered {
-                let config = &p.scene.emitters[index];
+                let Some(config) = p.scene.emitters.get(index) else {
+                    continue;
+                };
                 let multiplier = config.intensity * config.activity_at(p.clock.t);
                 let selected = p.ui_state.selected == index;
                 let label = format!("{name}  (x{multiplier:.2})");
@@ -306,10 +403,15 @@ fn right_panel(ctx: &mut egui::Context, p: &mut UiParams) {
                 ui.weak("no emitter selected");
                 return;
             };
-            let effect_path = p.scene.emitters[emitter.index].effect.clone();
+            let Some(config) = p.scene.emitters.get(emitter.index) else {
+                ui.weak("emitter out of sync (project switching)");
+                return;
+            };
+            let effect_path = config.effect.clone();
+            let emitter_name = config.name.clone();
             let asset_id = effect.handle.id();
 
-            ui.heading(&p.scene.emitters[emitter.index].name);
+            ui.heading(&emitter_name);
             ui.weak(&effect_path);
             ui.separator();
 
@@ -373,20 +475,20 @@ fn right_panel(ctx: &mut egui::Context, p: &mut UiParams) {
 
                 ui.separator();
                 ui.horizontal(|ui| {
-                    if ui.button("Save to file").clicked() {
-                        match save_effect(p, asset_id, &effect_path) {
-                            Ok(path) => p.ui_state.status = format!("saved {path}"),
-                            Err(e) => p.ui_state.status = format!("save failed: {e}"),
-                        }
-                    }
                     if ui.button("Reload from file").clicked() {
                         p.ui_state.models.remove(&asset_id);
+                        p.ui_state.dirty.remove(&asset_id);
                         p.ui_state.status = format!("reloading {effect_path}");
                         // Touching the file path forces the asset server to reload.
                         let full = std::path::Path::new("assets").join(&effect_path);
                         if let Ok(time) = std::fs::metadata(&full).and_then(|m| m.modified()) {
                             let _ = filetime_touch(&full, time);
                         }
+                    }
+                    if p.ui_state.dirty.contains_key(&asset_id) {
+                        ui.weak("unsaved edits (auto-saves)");
+                    } else {
+                        ui.weak("edits auto-save");
                     }
                 });
             });
@@ -400,6 +502,13 @@ fn right_panel(ctx: &mut egui::Context, p: &mut UiParams) {
                     p.ui_state.last_apply_frame = frame;
                 }
                 p.ui_state.models.insert(asset_id, model);
+                p.ui_state.dirty.insert(
+                    asset_id,
+                    DirtyEffect {
+                        path: effect_path.clone(),
+                        last_edit: Instant::now(),
+                    },
+                );
             }
         });
 }
@@ -656,16 +765,17 @@ fn apply_model(asset: &mut EffectAsset, model: &EffectEditModel) {
     }
 }
 
-fn save_effect(
-    p: &mut UiParams,
+/// Serializes an effect asset to canonical Hanabi RON at `assets/<path>`.
+fn save_effect_file(
+    effects: &Assets<EffectAsset>,
+    registry: &AppTypeRegistry,
     asset_id: AssetId<EffectAsset>,
     effect_path: &str,
 ) -> anyhow::Result<String> {
-    let asset = p
-        .effects
+    let asset = effects
         .get(asset_id)
         .ok_or_else(|| anyhow::anyhow!("asset not loaded"))?;
-    let registry = p.registry.read();
+    let registry = registry.read();
     let text = asset
         .serialize(&registry)
         .map_err(|e| anyhow::anyhow!("serialize: {e}"))?;

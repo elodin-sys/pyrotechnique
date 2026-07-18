@@ -22,21 +22,21 @@ SceneConfig(
     emitters: [
         EmitterConfig(
             name: "merlin_core",
-            effect: "effects/merlin_core.effect",
+            effect: "effects/falcon9/merlin_core.effect",
             position: (0.0, 0.3, 0.0),
             direction: (0.0, -1.0, 0.0),
             intensity: 1.0,
         ),
         EmitterConfig(
             name: "merlin_flame",
-            effect: "effects/merlin_flame.effect",
+            effect: "effects/falcon9/merlin_flame.effect",
             position: (0.0, 0.2, 0.0),
             direction: (0.0, -1.0, 0.0),
             intensity: 1.0,
         ),
         EmitterConfig(
             name: "exhaust_smoke",
-            effect: "effects/exhaust_smoke.effect",
+            effect: "effects/falcon9/exhaust_smoke.effect",
             position: (0.0, -8.0, 0.0),
             direction: (0.0, -1.0, 0.0),
             intensity: 0.0,
@@ -45,7 +45,7 @@ SceneConfig(
         ),
         EmitterConfig(
             name: "pad_smoke",
-            effect: "effects/pad_smoke.effect",
+            effect: "effects/falcon9/pad_smoke.effect",
             // World-fixed at the pad; clouds keep churning as the rocket
             // climbs away, exactly like the target lift-off photo.
             attach: "world",
@@ -106,32 +106,32 @@ SceneConfig(
             name: "lift-off",
             camera: "pad",
             capture_time: 5.0,
-            reference: Some("targets/falcon9-lift-off.jpeg"),
+            reference: Some("targets/falcon9/lift-off.jpeg"),
         ),
         ScenarioConfig(
             name: "ascent",
             camera: "tracker_close",
             capture_time: 25.0,
-            reference: Some("targets/falcon9-ascent.jpeg"),
+            reference: Some("targets/falcon9/ascent.jpeg"),
         ),
         ScenarioConfig(
             name: "max-q",
             camera: "tracker_far",
             capture_time: 60.0,
-            reference: Some("targets/falcon9-maxq.jpeg"),
+            reference: Some("targets/falcon9/maxq.jpeg"),
             exposure_ev100: Some(15.0),
         ),
         ScenarioConfig(
             name: "mid-flight",
             camera: "tracker_close",
             capture_time: 45.0,
-            reference: Some("targets/falcon9-mid-flight.webp"),
+            reference: Some("targets/falcon9/mid-flight.webp"),
         ),
         ScenarioConfig(
             name: "smoke-trail",
             camera: "wide",
             capture_time: 40.0,
-            reference: Some("targets/falcon9-smoke-trail.png"),
+            reference: Some("targets/falcon9/smoke-trail.png"),
             exposure_ev100: Some(14.2),
         ),
     ],

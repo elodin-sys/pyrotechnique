@@ -1,0 +1,177 @@
+// Apollo Lunar Module landing scene.
+//
+// Units: meters, seconds. Lander frame: base center at origin, +Y up (the GLB
+// is auto-normalized to `target_height`). The Moon is airless: atmosphere is
+// off (black sky), there is no drag, and the ground dust flies as a flat
+// ballistic sheet instead of billowing.
+//
+// Timeline: powered descent from 120 m, braking to a vertical drop, engine
+// cutoff at ~54 s, touchdown at 55 s. RCS quads pulse during the braking
+// phases (t=18-20 and t=33-35).
+SceneConfig(
+    model: ModelConfig(
+        path: "models/apollo-lunar-module.glb",
+        target_height: 7.0,
+    ),
+    environment: EnvironmentConfig(
+        sun_azimuth_deg: 320.0,
+        sun_elevation_deg: 32.0,
+        sun_illuminance: 130000.0,
+        exposure_ev100: 13.2,
+        bloom_intensity: 0.22,
+        ground_radius: 20000.0,
+        ground_color: (0.185, 0.18, 0.17),
+        atmosphere: false,
+    ),
+    emitters: [
+        EmitterConfig(
+            name: "descent_engine",
+            effect: "effects/apollo-lander/descent_plume.effect",
+            position: (0.0, 1.3, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+            // Full throttle through the descent, cutoff just before the pads
+            // touch (contact-probe shutdown).
+            activity: [(0.0, 1.0), (52.0, 1.0), (54.5, 0.0)],
+        ),
+        EmitterConfig(
+            name: "rcs_quad_px",
+            effect: "effects/apollo-lander/rcs_puff.effect",
+            position: (1.9, 5.4, 1.9),
+            direction: (0.25, -1.0, 0.25),
+            intensity: 1.0,
+            activity: [(0.0, 0.0), (17.5, 0.0), (18.0, 1.0), (20.0, 1.0), (20.5, 0.0), (32.5, 0.0), (33.0, 1.0), (35.0, 1.0), (35.5, 0.0)],
+        ),
+        EmitterConfig(
+            name: "rcs_quad_nx",
+            effect: "effects/apollo-lander/rcs_puff.effect",
+            position: (-1.9, 5.4, -1.9),
+            direction: (-0.25, -1.0, -0.25),
+            intensity: 1.0,
+            activity: [(0.0, 0.0), (17.5, 0.0), (18.0, 1.0), (20.0, 1.0), (20.5, 0.0), (32.5, 0.0), (33.0, 1.0), (35.0, 1.0), (35.5, 0.0)],
+        ),
+        EmitterConfig(
+            name: "rcs_quad_pz",
+            effect: "effects/apollo-lander/rcs_puff.effect",
+            position: (-1.9, 5.4, 1.9),
+            direction: (-0.25, -1.0, 0.25),
+            intensity: 1.0,
+            activity: [(0.0, 0.0), (18.5, 0.0), (19.0, 1.0), (20.5, 1.0), (21.0, 0.0), (33.5, 0.0), (34.0, 1.0), (35.5, 1.0), (36.0, 0.0)],
+        ),
+        EmitterConfig(
+            name: "rcs_quad_nz",
+            effect: "effects/apollo-lander/rcs_puff.effect",
+            position: (1.9, 5.4, -1.9),
+            direction: (0.25, -1.0, -0.25),
+            intensity: 1.0,
+            activity: [(0.0, 0.0), (18.5, 0.0), (19.0, 1.0), (20.5, 1.0), (21.0, 0.0), (33.5, 0.0), (34.0, 1.0), (35.5, 1.0), (36.0, 0.0)],
+        ),
+        EmitterConfig(
+            name: "ground_dust",
+            effect: "effects/apollo-lander/ground_dust.effect",
+            // World-fixed at the landing site: the dust sheet stays put as
+            // the lander settles onto it.
+            attach: "world",
+            position: (0.0, 0.0, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+            // Ramps in as the plume starts scouring the surface (~8 m alt),
+            // peaks through touchdown, settles instantly after cutoff (no
+            // air to keep grains aloft).
+            activity: [(0.0, 0.0), (43.0, 0.0), (46.0, 0.12), (49.0, 0.6), (51.0, 1.0), (54.0, 1.0), (56.0, 0.1), (58.0, 0.0)],
+        ),
+    ],
+    // Powered descent: braking approach from downrange, flattening into a
+    // vertical drop and a gentle touchdown at t=55.
+    flight: FlightConfig(
+        keyframes: [
+            FlightKey(t: 0.0, pos: (60.0, 120.0, 0.0)),
+            FlightKey(t: 10.0, pos: (36.0, 78.0, 0.0)),
+            FlightKey(t: 20.0, pos: (16.0, 44.0, 0.0)),
+            FlightKey(t: 30.0, pos: (5.0, 22.0, 0.0)),
+            FlightKey(t: 40.0, pos: (0.8, 9.0, 0.0)),
+            FlightKey(t: 50.0, pos: (0.0, 2.5, 0.0)),
+            FlightKey(t: 55.0, pos: (0.0, 0.0, 0.0)),
+            FlightKey(t: 62.0, pos: (0.0, 0.0, 0.0)),
+        ],
+        // Landers stay upright; don't pitch the model along the velocity.
+        align_to_velocity: false,
+    ),
+    cameras: [
+        // Side profile riding with the lander: vehicle top-half, plume below.
+        CameraPreset(
+            name: "side_close",
+            pos: (-8.0, 0.0, 13.0),
+            look_at: (0.0, -0.5, 0.0),
+            fov_deg: 42.0,
+            track_rocket: true,
+            follow_pos: true,
+        ),
+        // High chase looking down past the lander at the ground.
+        CameraPreset(
+            name: "top_profile",
+            pos: (10.0, 13.0, 10.0),
+            look_at: (0.0, -5.0, 0.0),
+            fov_deg: 42.0,
+            track_rocket: true,
+            follow_pos: true,
+        ),
+        // Fixed near the landing site; pans with the craft as it settles.
+        CameraPreset(
+            name: "ground_wide",
+            pos: (-26.0, 4.0, 30.0),
+            look_at: (0.0, 2.0, 0.0),
+            fov_deg: 32.0,
+            track_rocket: true,
+        ),
+        // Tight on the RCS quads near the top deck.
+        CameraPreset(
+            name: "rcs_close",
+            pos: (-6.5, 8.6, 8.5),
+            look_at: (0.0, 5.2, 0.0),
+            fov_deg: 30.0,
+            track_rocket: true,
+            follow_pos: true,
+        ),
+    ],
+    scenarios: [
+        ScenarioConfig(
+            name: "plume-side",
+            camera: "side_close",
+            capture_time: 30.0,
+            reference: Some("targets/apollo-lander/sim-landing-main-thruster-plume-side-profile.png"),
+        ),
+        ScenarioConfig(
+            name: "plume-top",
+            camera: "top_profile",
+            capture_time: 44.0,
+            reference: Some("targets/apollo-lander/sim-landing-main-thruster-plume-top-profile.png"),
+        ),
+        ScenarioConfig(
+            name: "rcs-far",
+            camera: "ground_wide",
+            capture_time: 34.0,
+            reference: Some("targets/apollo-lander/firstman-movie-rcs-thruster-fire-far.png"),
+            // The movie frame is nearly a silhouette; stop down.
+            exposure_ev100: Some(14.2),
+        ),
+        ScenarioConfig(
+            name: "rcs-close",
+            camera: "rcs_close",
+            capture_time: 34.5,
+            reference: Some("targets/apollo-lander/firstman-movie-rcs-thruster-fire-close-up.png"),
+        ),
+        ScenarioConfig(
+            name: "ground-effect",
+            camera: "ground_wide",
+            capture_time: 50.0,
+            reference: Some("targets/apollo-lander/sim-ground-effect-close.png"),
+        ),
+        ScenarioConfig(
+            name: "touchdown",
+            camera: "ground_wide",
+            capture_time: 54.0,
+            reference: Some("targets/apollo-lander/sim-ground-effect-closest-1.png"),
+        ),
+    ],
+)

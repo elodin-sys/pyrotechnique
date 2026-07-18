@@ -3,14 +3,18 @@
 A 3D HDR particle-effect design tool for [Bevy Hanabi](https://github.com/djeedai/bevy_hanabi),
 built for both humans and AI agents. Author GPU particle effects as plain
 `.effect` RON files, see them live on a real vehicle model in an HDR
-bloom-lit atmosphere, and capture deterministic screenshots to compare against
-reference photos.
+bloom-lit environment, and capture deterministic screenshots to compare
+against reference photos.
 
-The default example is a SpaceX Falcon 9 flying an animated launch profile
-with four layered exhaust effects, tuned against real launch photography (see
-`targets/`).
+Work is organized into **projects**. Two ship built in:
 
-![editor](targets/falcon9-lift-off.jpeg)
+- **falcon9** — SpaceX Falcon 9 flying an animated launch profile with four
+  layered exhaust effects, tuned against real launch photography.
+- **apollo-lander** — Apollo Lunar Module powered descent on an airless Moon:
+  vacuum descent plume, pulsed RCS quads, and a ballistic regolith dust sheet,
+  tuned against film and simulation references.
+
+![editor](targets/falcon9/lift-off.jpeg)
 
 ## Stack
 
@@ -21,31 +25,55 @@ with four layered exhaust effects, tuned against real launch photography (see
 | bevy_egui | 0.40 | Editor panels |
 | bevy_panorbit_camera | 0.35 | Viewport orbit controls |
 
+## Projects
+
+A project is a name that resolves by convention:
+
+```text
+assets/scenes/<project>.scene.ron     the scene (model, emitters, flight, scenarios)
+assets/effects/<project>/*.effect     the project's tunable effect files
+targets/<project>/                    reference images scenarios compare against
+shots/<project>/                      capture + screenshot output (gitignored)
+```
+
+Shared across projects: `assets/models/` (GLBs) and `assets/textures/`
+(generated sprites).
+
+To add a project: drop reference images in `targets/<name>/`, write
+`assets/scenes/<name>.scene.ron` (copy an existing one), point its emitters at
+effect files under `assets/effects/<name>/`, and wire each scenario's
+`reference:` at the target image. It then appears in the editor's project
+picker and works with `--project <name>`.
+
 ## Quick start
 
 ```bash
-# Interactive editor (default scene: Falcon 9 launch)
+# Interactive editor (falcon9 by default)
 cargo run
+cargo run -- edit apollo-lander
 
-# Deterministic capture of a scenario, with side-by-side vs the target photo
-cargo run -- capture --scenario lift-off --compare auto --out shots/liftoff.png
+# Deterministic capture, side-by-side vs the scenario's target image.
+# Output defaults to shots/<project>/<scenario>.png
+cargo run -- capture --scenario lift-off --compare auto
+cargo run -- capture --project apollo-lander --scenario plume-side --compare auto
 
-# Regenerate the built-in .effect files + sprite textures from Rust builders
+# Regenerate all built-in .effect files + sprite textures from Rust builders
 cargo run -- gen-effects
 ```
 
-Scenarios in the default scene: `lift-off`, `ascent`, `max-q`, `mid-flight`,
-`smoke-trail` — each maps to a reference image in `targets/`.
+Scenarios — falcon9: `lift-off`, `ascent`, `max-q`, `mid-flight`,
+`smoke-trail`. apollo-lander: `plume-side`, `plume-top`, `rcs-far`,
+`rcs-close`, `ground-effect`, `touchdown`.
 
 ## The agent loop
 
 This tool is built so an AI agent can iterate on effects without a GUI:
 
 ```text
-1. edit  assets/effects/<name>.effect         (plain RON — gradients, spawner, sizes)
-   and/or assets/scenes/falcon9.scene.ron     (emitters, cameras, flight, scenarios)
-2. run   cargo run -- capture --scenario <s> --compare auto --out shots/<s>.png
-3. look  at shots/<s>_vs_target.png           (capture left, reference right)
+1. edit  assets/effects/<project>/<name>.effect   (plain RON — gradients, spawner, sizes)
+   and/or assets/scenes/<project>.scene.ron       (emitters, cameras, flight, scenarios)
+2. run   cargo run -- capture --project <p> --scenario <s> --compare auto
+3. look  at shots/<p>/<s>_vs_target.png           (capture left, reference right)
 4. repeat
 ```
 
@@ -60,20 +88,23 @@ builders in `src/effects/builders.rs` and re-run `gen-effects`; for tuning
 
 ## Editor (edit mode)
 
-- **Top bar**: play/pause/restart, sim-time scrub, speed, scenario + camera
-  preset dropdowns, screenshot, gizmo toggle.
+- **Top bar**: project picker (switches projects live; selecting the open
+  project re-reads its scene from disk), play/pause/restart, sim-time scrub,
+  speed, scenario + camera preset dropdowns, screenshot, gizmo toggle.
 - **Left panel**: emitter list with live intensity multipliers; reference
   image overlay controls.
 - **Right panel**: inspector for the selected emitter's effect — spawner rate,
   alpha mode, **HDR color gradient editor** (unit color x intensity multiplier
-  per key), size gradient — plus *Save to file* (writes canonical Hanabi RON)
-  and *Reload from file*.
+  per key), size gradient.
+- **Auto-save**: inspector edits write back to the `.effect` file ~0.6 s after
+  you stop tweaking (and are flushed on project switch and exit). *Reload from
+  file* discards unsaved edits.
 - `.effect` files hot-reload when edited externally while the editor runs.
 - Restart despawns and respawns emitters, clearing world-space smoke.
 
 ## File formats
 
-### Effects: `assets/effects/*.effect`
+### Effects: `assets/effects/<project>/*.effect`
 
 Hanabi's canonical serialization (`EffectAsset::serialize`). Everything is
 editable; the most rewarding knobs are:
@@ -84,24 +115,24 @@ editable; the most rewarding knobs are:
 - `render_modifiers` -> `SizeOverLifetimeModifier.gradient` — meters
 - `init_modifiers` literals live in the `module.expressions` list, referenced
   by `"#N"` handles from modifiers (e.g. lifetime/velocity constants)
-- `alpha_mode` — `Add` for flame cores (light), `Blend` for smoke (media)
+- `alpha_mode` — `Add` for flame cores (light), `Blend` for smoke/dust (media)
 
-### Scene: `assets/scenes/*.scene.ron`
+### Scene: `assets/scenes/<project>.scene.ron`
 
-Declares the model, environment (sun/exposure/bloom), emitters, flight path,
-camera presets, and scenarios. Emitter fields deliberately mirror Elodin's
-`thruster` KDL schema (`position`, `direction`, `intensity`) so tuned results
-port straight back:
+Declares the model, environment (sun/exposure/bloom/atmosphere), emitters,
+flight path, camera presets, and scenarios. Emitter fields deliberately mirror
+Elodin's `thruster` KDL schema (`position`, `direction`, `intensity`) so tuned
+results port straight back:
 
 ```ron
 EmitterConfig(
     name: "merlin_flame",
-    effect: "effects/merlin_flame.effect",
+    effect: "effects/falcon9/merlin_flame.effect",
     position: (0.0, 0.2, 0.0),       // rocket frame: base center origin, +Y up
     direction: (0.0, -1.0, 0.0),     // exhaust direction
     intensity: 1.0,                  // spawn-rate multiplier
     activity: [(0.0, 1.0), ...],     // optional keyframes over flight time
-    attach: "rocket",                // or "world" (e.g. pad smoke)
+    attach: "rocket",                // or "world" (e.g. pad smoke, ground dust)
 )
 ```
 
@@ -109,14 +140,24 @@ Conventions: effects emit along **local -Y**; the emitter entity rotates -Y
 onto `direction`. The GLB is auto-normalized (height = `target_height`, base
 at origin, +Y up).
 
-## The four built-in effects
+Two scene flags matter for non-Earth, non-rocket scenes:
 
-| Effect | Space | Blend | Role |
-|---|---|---|---|
-| `merlin_core` | Local | Add | Blinding white-hot core, HDR ~30x, stretched along velocity |
-| `merlin_flame` | Local | Blend | Orange expanding flame column (diverging-cone velocity) |
-| `exhaust_smoke` | Global | Blend | Persistent world-space trail; 30-110 s lifetimes, grows to ~500 m |
-| `pad_smoke` | Global | Blend | Lift-off ground clouds; radial pad blast + buoyancy, world-attached |
+- `environment.atmosphere: false` — airless body: no sky scattering, black
+  clear color (apollo-lander).
+- `flight.align_to_velocity: false` — keep the vehicle upright instead of
+  pitching +Y along the path tangent (landers descend base-first).
+
+## The built-in effects
+
+| Project | Effect | Space | Blend | Role |
+|---|---|---|---|---|
+| falcon9 | `merlin_core` | Local | Add | Blinding white-hot core, HDR ~30x, stretched along velocity |
+| falcon9 | `merlin_flame` | Local | Blend | Orange expanding flame column (diverging-cone velocity) |
+| falcon9 | `exhaust_smoke` | Global | Blend | Persistent world-space trail; 30-110 s lifetimes, grows to ~500 m |
+| falcon9 | `pad_smoke` | Global | Blend | Lift-off ground clouds; radial pad blast + buoyancy, world-attached |
+| apollo-lander | `descent_plume` | Local | Add | Translucent straw-colored vacuum plume; short lifetimes, wide divergence |
+| apollo-lander | `rcs_puff` | Local | Add | Sharp white-blue attitude jets, pulsed via emitter `activity` |
+| apollo-lander | `ground_dust` | Global | Blend | Ballistic regolith streaks: flat radial sheet, lunar gravity, no drag |
 
 Techniques worth knowing (see `src/effects/builders.rs`):
 
@@ -125,11 +166,14 @@ Techniques worth knowing (see `src/effects/builders.rs`):
   nozzle -> plume expands downstream like a real underexpanded jet.
 - **Per-particle modulation**: random brightness/alpha packed into
   `Attribute::COLOR`, multiplied against the gradient with
-  `ColorBlendMode::Modulate` — turns uniform fog into billows.
+  `ColorBlendMode::Modulate` — turns uniform fog into billows (or dust into
+  grainy spray).
 - **Baked sprite shading**: the smoke sprite carries top-lit lobes + creases
   in RGB, sampled with `ImageSampleMapping::Modulate`.
 - **Wide lifetime spread** desynchronizes size-over-life across a trail
   cross-section, breaking up the "uniform tube" look.
+- **Vacuum look**: no drag, real gravity only, `AlongVelocity` orientation on
+  thin stretched sprites -> streaks instead of billows (apollo `ground_dust`).
 
 ## Elodin port path
 
@@ -145,22 +189,23 @@ Elodin-side picture.
 
 ```text
 src/
-├── main.rs        CLI (edit | capture | gen-effects)
+├── main.rs        CLI (edit | capture | gen-effects), project selection
 ├── app.rs         shared app assembly, SimClock
-├── render.rs      HDR camera, atmosphere, sun, ground
+├── project.rs     Project resource, discovery, runtime project switching
+├── render.rs      HDR camera, atmosphere, sun, ground (rebuilt per project)
 ├── rocket.rs      GLB load + normalization (RocketBounds)
 ├── flight.rs      flight-path -> rocket transform
 ├── scene.rs       scene RON schema + sampling helpers
 ├── capture.rs     deterministic capture state machine + compare composite
-├── ui.rs          egui editor panels
+├── ui.rs          egui editor panels, project picker, auto-save
 └── effects/
     ├── mod.rs         emitter spawning, intensity, hot reload, gizmos
     └── builders.rs    Rust builders for the built-in effects + sprites
 assets/
-├── effects/       *.effect (Hanabi RON) — the tunable artifacts
-├── scenes/        falcon9.scene.ron (+ debug variants)
-├── textures/      generated sprites (soft_circle, smoke_puff)
-└── models/        Falcon 9 GLB
-targets/           reference photos + original model
-shots/             capture output (gitignored)
+├── effects/<project>/   *.effect (Hanabi RON) — the tunable artifacts
+├── scenes/              <project>.scene.ron (+ debug variants)
+├── textures/            generated sprites (soft_circle, smoke_puff)
+└── models/              vehicle GLBs (shared)
+targets/<project>/       reference images
+shots/<project>/         capture output (gitignored)
 ```

@@ -24,6 +24,12 @@ fn drive_flight(
     };
     let (pos, vel) = scene.flight.sample(clock.t);
     transform.translation = pos;
-    let dir = vel.normalize_or(Vec3::Y);
-    transform.rotation = Quat::from_rotation_arc(Vec3::Y, dir);
+    transform.rotation = if scene.flight.align_to_velocity {
+        let dir = vel.normalize_or(Vec3::Y);
+        Quat::from_rotation_arc(Vec3::Y, dir)
+    } else {
+        // Landers and hovering craft stay upright regardless of travel
+        // direction.
+        Quat::IDENTITY
+    };
 }

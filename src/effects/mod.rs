@@ -235,19 +235,23 @@ fn apply_emitter_intensity(
 
 fn draw_emitter_gizmos(
     show: Res<ShowEmitterGizmos>,
+    bounds: Res<crate::rocket::RocketBounds>,
     mut gizmos: Gizmos,
     emitters: Query<&GlobalTransform, With<Emitter>>,
 ) {
     if !show.0 {
         return;
     }
+    // Scale gizmos with the vehicle so they read on a 7 m lander and a 70 m
+    // rocket alike.
+    let arrow = (bounds.height * 0.09).clamp(0.8, 6.0);
     for transform in &emitters {
         let origin = transform.translation();
         let exhaust = transform.rotation() * Vec3::NEG_Y;
-        gizmos.sphere(origin, 0.6, Color::srgb(1.0, 0.3, 0.1));
+        gizmos.sphere(origin, arrow * 0.1, Color::srgb(1.0, 0.3, 0.1));
         gizmos.arrow(
             origin,
-            origin + exhaust * 6.0,
+            origin + exhaust * arrow,
             Color::srgb(1.0, 0.6, 0.1),
         );
     }

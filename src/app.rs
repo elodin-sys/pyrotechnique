@@ -5,6 +5,7 @@ use bevy::window::{PresentMode, WindowResolution};
 use bevy_hanabi::HanabiPlugin;
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
 
+use crate::project::Project;
 use crate::scene::SceneConfig;
 use crate::{CaptureArgs, EditArgs};
 
@@ -34,6 +35,7 @@ fn advance_sim_clock(mut clock: ResMut<SimClock>, time: Res<Time>) {
 }
 
 pub struct BaseConfig {
+    pub project: Project,
     pub scene: SceneConfig,
     pub window_size: (u32, u32),
     pub watch_assets: bool,
@@ -68,9 +70,11 @@ pub fn build_base_app(config: BaseConfig) -> App {
     )
     .add_plugins(HanabiPlugin)
     .add_plugins(PanOrbitCameraPlugin)
+    .insert_resource(config.project)
     .insert_resource(config.scene)
     .init_resource::<SimClock>()
     .add_systems(Update, advance_sim_clock)
+    .add_plugins(crate::project::ProjectPlugin)
     .add_plugins(crate::render::EnvironmentPlugin)
     .add_plugins(crate::rocket::RocketPlugin)
     .add_plugins(crate::flight::FlightPlugin)
@@ -79,13 +83,16 @@ pub fn build_base_app(config: BaseConfig) -> App {
 }
 
 pub fn run_edit(args: EditArgs) -> anyhow::Result<()> {
-    let scene = crate::scene::load_scene_config(&args.scene)?;
+    let project = Project::new(args.project);
+    let scene = crate::scene::load_scene_config(&project.scene_path())?;
+    let title = format!("pyrotechnique — {}", project.name);
     let mut app = build_base_app(BaseConfig {
+        project,
         scene,
         window_size: (1600, 1000),
         watch_assets: true,
         vsync: true,
-        title: "pyrotechnique".to_string(),
+        title,
     });
     // Start paused on the pad; the user presses Play (or picks a scenario).
     app.insert_resource(SimClock {
@@ -101,7 +108,8 @@ pub fn run_edit(args: EditArgs) -> anyhow::Result<()> {
 pub fn run_capture(args: CaptureArgs) -> anyhow::Result<()> {
     use bevy::time::TimeUpdateStrategy;
 
-    let scene = crate::scene::load_scene_config(&args.scene)?;
+    let project = Project::new(args.project.clone());
+    let scene = crate::scene::load_scene_config(&project.scene_path())?;
     let scenario = scene
         .scenario(&args.scenario)
         .ok_or_else(|| {
@@ -137,8 +145,13 @@ pub fn run_capture(args: CaptureArgs) -> anyhow::Result<()> {
 
     let (w, h) = parse_size(&args.size)?;
     let step = std::time::Duration::from_secs_f64(1.0 / args.fps.max(1.0));
+    let out = args
+        .out
+        .clone()
+        .unwrap_or_else(|| project.shots_dir().join(format!("{}.png", args.scenario)));
 
     let mut app = build_base_app(BaseConfig {
+        project,
         scene,
         window_size: (w, h),
         watch_assets: false,
@@ -151,7 +164,7 @@ pub fn run_capture(args: CaptureArgs) -> anyhow::Result<()> {
         .insert_resource(crate::capture::CaptureConfig {
             scenario: args.scenario.clone(),
             end_time,
-            out: args.out.clone(),
+            out,
             compare,
             seed: args.seed,
             step,

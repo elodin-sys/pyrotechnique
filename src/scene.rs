@@ -44,6 +44,10 @@ pub struct EnvironmentConfig {
     pub bloom_intensity: f32,
     pub ground_radius: f32,
     pub ground_color: [f32; 3],
+    /// Earth atmosphere (sky + aerial perspective). `false` = airless body:
+    /// black sky, no scattering (e.g. the Moon).
+    #[serde(default = "default_true")]
+    pub atmosphere: bool,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -71,6 +75,10 @@ pub struct EmitterConfig {
 
 fn default_intensity() -> f32 {
     1.0
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_attach() -> String {
@@ -111,8 +119,13 @@ pub fn sample_keyframes(keys: &[[f32; 2]], t: f32) -> Option<f32> {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct FlightConfig {
     /// Position keyframes of the rocket base over time. Attitude is derived
-    /// from the path tangent (+Y along velocity).
+    /// from the path tangent (+Y along velocity) unless `align_to_velocity`
+    /// is false.
     pub keyframes: Vec<FlightKey>,
+    /// Rotate +Y along the velocity vector (rockets ascending nose-first).
+    /// Set false for vehicles that stay upright while descending (landers).
+    #[serde(default = "default_true")]
+    pub align_to_velocity: bool,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
