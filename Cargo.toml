@@ -1,0 +1,27 @@
+[package]
+name = "pyrotechnique"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+bevy = { version = "0.19", features = ["jpeg", "webp", "file_watcher"] }
+bevy_egui = "0.40"
+bevy_hanabi = { version = "0.19", default-features = false, features = ["3d"] }
+bevy_panorbit_camera = { version = "0.35", features = ["bevy_egui"] }
+clap = { version = "4", features = ["derive"] }
+image = "0.25"
+rand = "0.10"
+rand_pcg = "0.10"
+ron = "0.12"
+serde = { version = "1", features = ["derive"] }
+
+# Fast iteration: optimize deps (esp. bevy/wgpu) even in dev, keep our crate quick to compile.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
