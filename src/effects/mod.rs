@@ -9,7 +9,9 @@
 pub mod builders;
 
 use bevy::prelude::*;
-use bevy_hanabi::{CpuValue, EffectAsset, EffectMaterial, EffectSpawner, ParticleEffect};
+use bevy_hanabi::{
+    CpuValue, EffectAsset, EffectMaterial, EffectProperties, EffectSpawner, ParticleEffect,
+};
 
 use crate::app::SimClock;
 use crate::rocket::RocketRoot;
@@ -18,6 +20,18 @@ use crate::scene::{EmitterConfig, SceneConfig};
 /// Below this effective multiplier the emitter is fully deactivated.
 const ACTIVITY_CUTOFF: f32 = 1e-3;
 
+/// Property names of the anchored-trail contract (see `builders::exhaust_smoke`):
+/// an effect declaring these runs on a world-fixed anchor and receives the
+/// live nozzle pose through them each frame.
+pub const SPAWN_ORIGIN_PROPERTY: &str = "spawn_origin";
+pub const SPAWN_AXIS_PROPERTY: &str = "spawn_axis";
+
+/// Optional throttle property (1.0 = full throttle). Effects declaring it get
+/// the live `intensity x activity(t)` signal every frame, next to the spawner
+/// rate, and can wire it into speed/size/color expressions (plume length and
+/// brightness, not just particle density).
+pub const INTENSITY_PROPERTY: &str = "intensity";
+
 /// Live emitter instance, child of the rocket root.
 #[derive(Component)]
 pub struct Emitter {
@@ -25,6 +39,11 @@ pub struct Emitter {
     /// Index into `SceneConfig::emitters`.
     pub index: usize,
 }
+
+/// Marker for emitters re-homed to a world-fixed anchor because their effect
+/// declares the anchored-trail properties.
+#[derive(Component)]
+pub struct TrailAnchored;
 
 /// Light child of an emitter entity; intensity follows the emitter's
 /// `intensity x activity(t)` signal (see `apply_emitter_lights`).
@@ -48,6 +67,8 @@ impl Plugin for EmitterPlugin {
                 spawn_emitters,
                 bind_effect_materials,
                 recompile_on_asset_change,
+                anchor_trail_emitters,
+                apply_trail_properties,
                 apply_emitter_intensity,
                 apply_emitter_lights,
                 draw_emitter_gizmos,
@@ -232,6 +253,67 @@ fn bind_effect_materials(
     }
 }
 
+/// True when the loaded asset declares the anchored-trail properties.
+fn is_anchored_trail(asset: &EffectAsset) -> bool {
+    asset
+        .properties()
+        .iter()
+        .any(|p| p.name() == SPAWN_ORIGIN_PROPERTY)
+}
+
+/// Emitters not yet re-homed by [`anchor_trail_emitters`].
+type UnanchoredEmitters<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ParticleEffect),
+    (With<Emitter>, Without<TrailAnchored>),
+>;
+
+/// Re-homes emitters whose effect declares the anchored-trail contract: the
+/// instance detaches from the rocket and sits at the world origin (identity
+/// transform); `apply_trail_properties` then feeds it the live nozzle pose.
+/// Runs whenever the asset becomes available (spawn order independent).
+fn anchor_trail_emitters(
+    mut commands: Commands,
+    effects: Res<Assets<EffectAsset>>,
+    emitters: UnanchoredEmitters,
+) {
+    for (entity, effect) in &emitters {
+        let Some(asset) = effects.get(&effect.handle) else {
+            continue;
+        };
+        if !is_anchored_trail(asset) {
+            continue;
+        }
+        commands
+            .entity(entity)
+            .remove::<ChildOf>()
+            .insert((TrailAnchored, Transform::IDENTITY, EffectProperties::default()));
+    }
+}
+
+/// Every frame: write the nozzle pose (in the anchor's frame — here, plain
+/// world coordinates) into the anchored-trail properties.
+fn apply_trail_properties(
+    scene: Res<SceneConfig>,
+    rocket: Query<&GlobalTransform, With<RocketRoot>>,
+    mut emitters: Query<(&Emitter, &mut EffectProperties), With<TrailAnchored>>,
+) {
+    let Ok(rocket) = rocket.single() else {
+        return;
+    };
+    for (emitter, mut properties) in &mut emitters {
+        let Some(config) = scene.emitters.get(emitter.index) else {
+            continue;
+        };
+        let nozzle = rocket.affine() * emitter_transform(config).compute_affine();
+        let origin: Vec3 = nozzle.translation.into();
+        let axis = (nozzle.matrix3 * Vec3::NEG_Y).normalize_or(Vec3::NEG_Y);
+        properties.set(SPAWN_ORIGIN_PROPERTY, origin.into());
+        properties.set(SPAWN_AXIS_PROPERTY, axis.into());
+    }
+}
+
 /// Hanabi only recompiles when `ParticleEffect` changes, so nudge instances
 /// whose underlying asset was modified on disk (hot reload).
 fn recompile_on_asset_change(
@@ -261,14 +343,23 @@ fn scale_cpu_value(value: &CpuValue<f32>, factor: f32) -> CpuValue<f32> {
 }
 
 /// Every frame: spawner settings = authored settings from the `.effect` asset,
-/// with the spawn count scaled by `intensity x activity(t)`.
+/// with the spawn count scaled by `intensity x activity(t)`. Effects that
+/// declare the `intensity` property additionally receive the same signal as a
+/// shader uniform (throttle-driven plume length/brightness).
 fn apply_emitter_intensity(
+    mut commands: Commands,
     clock: Res<SimClock>,
     scene: Res<SceneConfig>,
     effects: Res<Assets<EffectAsset>>,
-    mut emitters: Query<(&Emitter, &ParticleEffect, &mut EffectSpawner)>,
+    mut emitters: Query<(
+        Entity,
+        &Emitter,
+        &ParticleEffect,
+        &mut EffectSpawner,
+        Option<&mut EffectProperties>,
+    )>,
 ) {
-    for (emitter, effect, mut spawner) in &mut emitters {
+    for (entity, emitter, effect, mut spawner, properties) in &mut emitters {
         let Some(config) = scene.emitters.get(emitter.index) else {
             continue;
         };
@@ -276,6 +367,21 @@ fn apply_emitter_intensity(
             continue;
         };
         let multiplier = config.intensity * config.activity_at(clock.t);
+        if asset
+            .properties()
+            .iter()
+            .any(|p| p.name() == INTENSITY_PROPERTY)
+        {
+            let clamped = multiplier.clamp(0.0, 1.0);
+            match properties {
+                Some(mut properties) => properties.set(INTENSITY_PROPERTY, clamped.into()),
+                None => {
+                    let mut instance = EffectProperties::default();
+                    instance.set(INTENSITY_PROPERTY, clamped.into());
+                    commands.entity(entity).insert(instance);
+                }
+            }
+        }
         if multiplier <= ACTIVITY_CUTOFF {
             spawner.active = false;
             continue;

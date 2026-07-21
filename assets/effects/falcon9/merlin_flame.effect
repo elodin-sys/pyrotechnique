@@ -23,28 +23,34 @@
       ),
     },
     {
-      "bevy_hanabi::modifier::velocity::SetVelocitySphereModifier": (
-        center: "#4",
-        speed: "#7",
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "velocity",
+        value: "#17",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "age",
-        value: "#8",
+        value: "#18",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "lifetime",
-        value: "#11",
+        value: "#21",
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "color",
+        value: "#30",
       ),
     },
   ],
   update_modifiers: [
     {
       "bevy_hanabi::modifier::force::LinearDragModifier": (
-        drag: "#12",
+        drag: "#31",
       ),
     },
   ],
@@ -57,7 +63,7 @@
     },
     {
       "bevy_hanabi::modifier::output::ParticleTextureModifier": (
-        texture_slot: "#13",
+        texture_slot: "#32",
         sample_mapping: ModulateOpacityFromR,
       ),
     },
@@ -104,7 +110,7 @@
             ),
           ],
         ),
-        blend: Overwrite,
+        blend: Modulate,
         mask: (15),
       ),
     },
@@ -123,18 +129,87 @@
         left: "#5",
         right: "#6",
       ),
+      Literal(Scalar(Float(0.35))),
+      Literal(Scalar(Float(0.65))),
+      Property(1),
+      Binary(
+        op: Mul,
+        left: "#9",
+        right: "#10",
+      ),
+      Binary(
+        op: Add,
+        left: "#8",
+        right: "#11",
+      ),
+      Binary(
+        op: Mul,
+        left: "#7",
+        right: "#12",
+      ),
+      Attribute((
+        attr: "position",
+      )),
+      Binary(
+        op: Sub,
+        left: "#14",
+        right: "#4",
+      ),
+      Unary(
+        op: Normalize,
+        expr: "#15",
+      ),
+      Binary(
+        op: Mul,
+        left: "#16",
+        right: "#13",
+      ),
       Literal(Scalar(Float(0.0))),
       Literal(Scalar(Float(0.5))),
       Literal(Scalar(Float(1.4))),
       Binary(
         op: UniformRand,
-        left: "#9",
-        right: "#10",
+        left: "#19",
+        right: "#20",
+      ),
+      Literal(Scalar(Float(0.4))),
+      Literal(Scalar(Float(0.6))),
+      Property(1),
+      Binary(
+        op: Mul,
+        left: "#23",
+        right: "#24",
+      ),
+      Binary(
+        op: Add,
+        left: "#22",
+        right: "#25",
+      ),
+      Ternary(
+        op: Vec3,
+        first: "#26",
+        second: "#26",
+        third: "#26",
+      ),
+      Literal(Scalar(Float(1.0))),
+      Binary(
+        op: Vec4XyzW,
+        left: "#27",
+        right: "#28",
+      ),
+      Unary(
+        op: Pack4x8unorm,
+        expr: "#29",
       ),
       Literal(Scalar(Float(1.0))),
       Literal(Scalar(Uint(0))),
     ],
-    properties: [],
+    properties: [
+      (
+        name: "intensity",
+        default_value: Scalar(Float(1.0)),
+      ),
+    ],
     texture_layout: (
       layout: [
         (

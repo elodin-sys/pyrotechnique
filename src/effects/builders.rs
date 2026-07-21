@@ -165,8 +165,15 @@ fn fbm(x: f32, y: f32, octaves: u32) -> f32 {
 /// Blinding additive HDR core right at the engine cluster. Fast, dense, and
 /// stretched along velocity — reads as the continuous white-hot flame column
 /// (~30 m at sea level) in every target photo.
+///
+/// Declares the `intensity` property (1.0 = full throttle): the runtime sets
+/// it every frame next to the spawner rate, and the effect wires it into
+/// exhaust speed (plume length) and particle brightness, so a throttled
+/// engine reads shorter and dimmer, not just thinner. At `intensity = 1.0`
+/// the effect is exactly the tuned full-throttle look.
 fn merlin_core() -> EffectAsset {
     let writer = ExprWriter::new();
+    let intensity = writer.add_property("intensity", 1.0f32.into());
 
     let init_pos = SetPositionCone3dModifier {
         height: writer.lit(1.2).expr(),
@@ -176,7 +183,9 @@ fn merlin_core() -> EffectAsset {
     };
 
     // Exhaust along local -Y, fast with a little per-particle variation.
-    let speed = writer.lit(90.0).uniform(writer.lit(130.0));
+    // Speed scales with throttle: length ~ speed x lifetime.
+    let speed = writer.lit(90.0).uniform(writer.lit(130.0))
+        * (writer.lit(0.35) + writer.lit(0.65) * writer.prop(intensity));
     let vel = writer.lit(Vec3::NEG_Y) * speed;
     let init_vel = SetAttributeModifier::new(Attribute::VELOCITY, vel.expr());
 
@@ -184,13 +193,25 @@ fn merlin_core() -> EffectAsset {
     let lifetime = writer.lit(0.12).uniform(writer.lit(0.3)).expr();
     let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
 
+    // Brightness tracks throttle through the per-particle COLOR modulation
+    // (identity at full throttle; LDR clamp makes it dim-only).
+    let brightness = writer.lit(0.4) + writer.lit(0.6) * writer.prop(intensity);
+    let rgba = brightness
+        .clone()
+        .vec3(brightness.clone(), brightness)
+        .vec4_xyz_w(writer.lit(1.0))
+        .pack4x8unorm();
+    let init_brightness = SetAttributeModifier::new(Attribute::COLOR, rgba.expr());
+
     let drag = LinearDragModifier::new(writer.lit(0.4).expr());
 
     // Blinding white-yellow core cooling through orange. Values are far above
     // 1.0 on purpose: the sky is physically lit, so saturating through the
-    // exposure + tonemapper takes serious radiance.
+    // exposure + tonemapper takes serious radiance. (Key 0 carries the
+    // hand-tuned value from the shipped .effect, not the original authoring
+    // guess — keep them in sync when regenerating.)
     let mut color = Gradient::new();
-    color.add_key(0.0, Vec4::new(34.0, 30.0, 22.0, 1.0));
+    color.add_key(0.0, Vec4::new(32.0, 28.235298, 20.705883, 1.0));
     color.add_key(0.22, Vec4::new(26.0, 12.0, 2.4, 1.0));
     color.add_key(0.6, Vec4::new(12.0, 3.6, 0.55, 0.6));
     color.add_key(1.0, Vec4::new(3.0, 0.8, 0.1, 0.0));
@@ -213,6 +234,7 @@ fn merlin_core() -> EffectAsset {
         .init(init_vel)
         .init(init_age)
         .init(init_lifetime)
+        .init(init_brightness)
         .update(drag)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
@@ -223,17 +245,21 @@ fn merlin_core() -> EffectAsset {
             gradient: size,
             screen_space_size: false,
         })
+        // Modulate: gradient x per-particle COLOR (identity at intensity 1.0,
+        // dims with throttle via the init COLOR write above).
         .render(ColorOverLifetimeModifier {
             gradient: color,
-            blend: ColorBlendMode::Overwrite,
+            blend: ColorBlendMode::Modulate,
             mask: ColorBlendMask::RGBA,
         })
 }
 
 /// Orange turbulent flame column surrounding/extending the core. Alpha
-/// blended, longer lived, with drag so it billows out and fades.
+/// blended, longer lived, with drag so it billows out and fades. Declares the
+/// `intensity` throttle property like `merlin_core` (length + brightness).
 fn merlin_flame() -> EffectAsset {
     let writer = ExprWriter::new();
+    let intensity = writer.add_property("intensity", 1.0f32.into());
 
     let init_pos = SetPositionCone3dModifier {
         height: writer.lit(1.5).expr(),
@@ -244,15 +270,27 @@ fn merlin_flame() -> EffectAsset {
 
     // Diverging cone: velocity radiates from a virtual center "behind" the
     // nozzle (inside the rocket, +Y), so the column expands downstream like a
-    // real underexpanded plume.
-    let init_vel = SetVelocitySphereModifier {
-        center: writer.lit(Vec3::new(0.0, 9.0, 0.0)).expr(),
-        speed: writer.lit(70.0).uniform(writer.lit(110.0)).expr(),
-    };
+    // real underexpanded plume. Speed scales with throttle (plume length).
+    let center = writer.lit(Vec3::new(0.0, 9.0, 0.0));
+    let speed = writer.lit(70.0).uniform(writer.lit(110.0))
+        * (writer.lit(0.35) + writer.lit(0.65) * writer.prop(intensity));
+    let init_vel = SetAttributeModifier::new(
+        Attribute::VELOCITY,
+        ((writer.attr(Attribute::POSITION) - center).normalized() * speed).expr(),
+    );
 
     let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
     let lifetime = writer.lit(0.5).uniform(writer.lit(1.4)).expr();
     let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    // Dim with throttle via per-particle COLOR (identity at full throttle).
+    let brightness = writer.lit(0.4) + writer.lit(0.6) * writer.prop(intensity);
+    let rgba = brightness
+        .clone()
+        .vec3(brightness.clone(), brightness)
+        .vec4_xyz_w(writer.lit(1.0))
+        .pack4x8unorm();
+    let init_brightness = SetAttributeModifier::new(Attribute::COLOR, rgba.expr());
 
     let drag = LinearDragModifier::new(writer.lit(1.0).expr());
 
@@ -279,6 +317,7 @@ fn merlin_flame() -> EffectAsset {
         .init(init_vel)
         .init(init_age)
         .init(init_lifetime)
+        .init(init_brightness)
         .update(drag)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
@@ -289,32 +328,58 @@ fn merlin_flame() -> EffectAsset {
             gradient: size,
             screen_space_size: false,
         })
+        // Modulate: gradient x per-particle COLOR (identity at intensity 1.0).
         .render(ColorOverLifetimeModifier {
             gradient: color,
-            blend: ColorBlendMode::Overwrite,
+            blend: ColorBlendMode::Modulate,
             mask: ColorBlendMask::RGBA,
         })
 }
 
-/// Persistent world-space smoke column. `SimulationSpace::Global` is the whole
-/// point: particles detach from the rocket at spawn and hang in the sky for
-/// tens of seconds, painting the trail the `smoke-trail` target shows.
+/// Persistent world-space smoke column, floating-origin-safe edition.
+///
+/// The effect runs in `SimulationSpace::Local` on a **world-fixed anchor
+/// entity**; the moving nozzle is fed in per frame through two vec3
+/// properties (the "anchored trail" contract shared with Elodin):
+///
+/// - `spawn_origin`: nozzle position in the anchor's local frame [m]
+/// - `spawn_axis`: unit exhaust direction in the anchor frame
+///
+/// Runtimes that see these properties on an effect must attach the instance
+/// to a world-fixed anchor (pyrotechnique: the world origin; Elodin: a
+/// grid-cell entity frozen at ignition) and write the properties every
+/// frame. Particles then hang in world space — the trail the `smoke-trail`
+/// target shows — without `SimulationSpace::Global`, which cannot survive
+/// Elodin's floating-origin rebasing.
 fn exhaust_smoke() -> EffectAsset {
     let writer = ExprWriter::new();
 
+    let spawn_origin = writer.add_property("spawn_origin", Vec3::ZERO.into());
+    let spawn_axis = writer.add_property("spawn_axis", Vec3::NEG_Y.into());
+
+    // Small birth volume around the (property-driven) nozzle point. The cone
+    // is axis-aligned rather than rotated onto `spawn_axis`: its 3 m extent
+    // vanishes against 30-110 s lifetimes and 540 m puffs.
     let init_pos = SetPositionCone3dModifier {
         height: writer.lit(3.0).expr(),
         base_radius: writer.lit(1.4).expr(),
         top_radius: writer.lit(2.2).expr(),
         dimension: ShapeDimension::Volume,
     };
+    let offset_pos = SetAttributeModifier::new(
+        Attribute::POSITION,
+        (writer.attr(Attribute::POSITION) + writer.prop(spawn_origin)).expr(),
+    );
 
-    // Diverging cone (virtual center behind the nozzle) so the trail widens
-    // with distance instead of staying a pencil line.
-    let init_vel = SetVelocitySphereModifier {
-        center: writer.lit(Vec3::new(0.0, 5.0, 0.0)).expr(),
-        speed: writer.lit(20.0).uniform(writer.lit(36.0)).expr(),
-    };
+    // Diverging cone: radiate from a virtual center 5 m up-plume of the
+    // nozzle, so the trail widens downstream exactly like the old
+    // Global-space SetVelocitySphereModifier version.
+    let center = writer.prop(spawn_origin) - writer.prop(spawn_axis) * writer.lit(5.0);
+    let speed = writer.lit(20.0).uniform(writer.lit(36.0));
+    let init_vel = SetAttributeModifier::new(
+        Attribute::VELOCITY,
+        ((writer.attr(Attribute::POSITION) - center).normalized() * speed).expr(),
+    );
 
     let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
     // Wide lifetime spread desynchronizes the growth curve along the column,
@@ -350,9 +415,10 @@ fn exhaust_smoke() -> EffectAsset {
 
     EffectAsset::new(65536, SpawnerSettings::rate(220.0.into()), module)
         .with_name("exhaust_smoke")
-        .with_simulation_space(SimulationSpace::Global)
+        .with_simulation_space(SimulationSpace::Local)
         .with_alpha_mode(bevy_hanabi::AlphaMode::Blend)
         .init(init_pos)
+        .init(offset_pos)
         .init(init_vel)
         .init(init_age)
         .init(init_lifetime)

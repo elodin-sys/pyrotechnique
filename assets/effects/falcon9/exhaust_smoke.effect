@@ -10,7 +10,7 @@
     emit_on_start: true,
   ),
   z_layer_2d: 0.0,
-  simulation_space: Global,
+  simulation_space: Local,
   simulation_condition: WhenVisible,
   prng_seed: 0,
   init_modifiers: [
@@ -23,39 +23,45 @@
       ),
     },
     {
-      "bevy_hanabi::modifier::velocity::SetVelocitySphereModifier": (
-        center: "#4",
-        speed: "#7",
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "position",
+        value: "#6",
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "velocity",
+        value: "#18",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "age",
-        value: "#8",
+        value: "#19",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "lifetime",
-        value: "#11",
+        value: "#22",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "color",
-        value: "#24",
+        value: "#35",
       ),
     },
   ],
   update_modifiers: [
     {
       "bevy_hanabi::modifier::force::LinearDragModifier": (
-        drag: "#25",
+        drag: "#36",
       ),
     },
     {
       "bevy_hanabi::modifier::accel::AccelModifier": (
-        accel: "#26",
+        accel: "#37",
       ),
     },
   ],
@@ -68,7 +74,7 @@
     },
     {
       "bevy_hanabi::modifier::output::ParticleTextureModifier": (
-        texture_slot: "#27",
+        texture_slot: "#38",
         sample_mapping: Modulate,
       ),
     },
@@ -130,21 +136,59 @@
       Literal(Scalar(Float(3.0))),
       Literal(Scalar(Float(1.4))),
       Literal(Scalar(Float(2.2))),
-      Literal(Vector(Vec3((0.0, 5.0, 0.0)))),
+      Attribute((
+        attr: "position",
+      )),
+      Property(1),
+      Binary(
+        op: Add,
+        left: "#4",
+        right: "#5",
+      ),
+      Property(1),
+      Property(2),
+      Literal(Scalar(Float(5.0))),
+      Binary(
+        op: Mul,
+        left: "#8",
+        right: "#9",
+      ),
+      Binary(
+        op: Sub,
+        left: "#7",
+        right: "#10",
+      ),
       Literal(Scalar(Float(20.0))),
       Literal(Scalar(Float(36.0))),
       Binary(
         op: UniformRand,
-        left: "#5",
-        right: "#6",
+        left: "#12",
+        right: "#13",
+      ),
+      Attribute((
+        attr: "position",
+      )),
+      Binary(
+        op: Sub,
+        left: "#15",
+        right: "#11",
+      ),
+      Unary(
+        op: Normalize,
+        expr: "#16",
+      ),
+      Binary(
+        op: Mul,
+        left: "#17",
+        right: "#14",
       ),
       Literal(Scalar(Float(0.0))),
       Literal(Scalar(Float(30.0))),
       Literal(Scalar(Float(110.0))),
       Binary(
         op: UniformRand,
-        left: "#9",
-        right: "#10",
+        left: "#20",
+        right: "#21",
       ),
       BuiltIn((
         operator: Rand(Scalar(Float)),
@@ -152,14 +196,14 @@
       Literal(Scalar(Float(0.27999997))),
       Binary(
         op: Mul,
-        left: "#12",
-        right: "#13",
+        left: "#23",
+        right: "#24",
       ),
       Literal(Scalar(Float(0.72))),
       Binary(
         op: Add,
-        left: "#14",
-        right: "#15",
+        left: "#25",
+        right: "#26",
       ),
       BuiltIn((
         operator: Rand(Scalar(Float)),
@@ -167,35 +211,44 @@
       Literal(Scalar(Float(0.75))),
       Binary(
         op: Mul,
-        left: "#17",
-        right: "#18",
+        left: "#28",
+        right: "#29",
       ),
       Literal(Scalar(Float(0.25))),
       Binary(
         op: Add,
-        left: "#19",
-        right: "#20",
+        left: "#30",
+        right: "#31",
       ),
       Ternary(
         op: Vec3,
-        first: "#16",
-        second: "#16",
-        third: "#16",
+        first: "#27",
+        second: "#27",
+        third: "#27",
       ),
       Binary(
         op: Vec4XyzW,
-        left: "#22",
-        right: "#21",
+        left: "#33",
+        right: "#32",
       ),
       Unary(
         op: Pack4x8unorm,
-        expr: "#23",
+        expr: "#34",
       ),
       Literal(Scalar(Float(0.5))),
       Literal(Vector(Vec3((3.0, 1.0, 0.8)))),
       Literal(Scalar(Uint(0))),
     ],
-    properties: [],
+    properties: [
+      (
+        name: "spawn_origin",
+        default_value: Vector(Vec3((0.0, 0.0, 0.0))),
+      ),
+      (
+        name: "spawn_axis",
+        default_value: Vector(Vec3((0.0, -1.0, 0.0))),
+      ),
+    ],
     texture_layout: (
       layout: [
         (

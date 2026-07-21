@@ -189,29 +189,38 @@ Elodin (Bevy/hanabi 0.19) loads these exact `.effect` files:
 `thruster effect="effects/<project>/<name>.effect"` in a KDL schematic renders
 them with intensity driven by live simulation telemetry, and the schematic
 `environment` node + viewport `hdr`/`ev100`/`bloom` reproduce the lighting.
-The apollo-lander example (`elodin/examples/apollo-lander`) runs on the files
-from this repo. Porting checklist:
+The apollo-lander and falcon9 examples (`elodin/examples/apollo-lander`,
+`elodin/examples/falcon9`) run on the files from this repo. Porting checklist:
 
 1. **Author here at the sim's rendered scale.** The scene's `target_height`
-   must match the metric size Elodin renders the GLB at (apollo: 5.0 m).
-   Effects are in meters; a scale mismatch reads immediately.
-2. **Static-emitter effects use `SimulationSpace::Local`** (ground dust, pad
-   smoke): identical visuals here, floating-origin-safe in Elodin. Only
-   moving-emitter trails (`exhaust_smoke`) stay Global — those don't port yet.
+   must match the metric size Elodin renders the GLB at (apollo: 5.0 m,
+   falcon9: 70.0 m). Effects are in meters; a scale mismatch reads
+   immediately.
+2. **Never use `SimulationSpace::Global`.** Static emitters (ground dust,
+   pad smoke) are plain `Local`; moving-emitter trails use the
+   **anchored-trail contract** — `Local` plus `spawn_origin`/`spawn_axis`
+   vec3 properties (see AGENTS.md) — which both runtimes re-home onto a
+   world-fixed anchor. `exhaust_smoke` is the reference.
 3. **Sim publishes viz channels** (0..1 per effect: thrust fraction,
-   per-nozzle RCS, ground-dust level). Normalization lives sim-side; KDL
-   `intensity` stays a bare component reference.
+   per-nozzle RCS, ground-dust/trail level). Normalization lives sim-side;
+   KDL `intensity` stays a bare component reference. Effects that declare
+   the `intensity` property additionally get the live signal as a shader
+   uniform (throttle-driven plume length/brightness).
 4. **Copy files** into the sim's asset tree: `.effect` files under
    `assets/effects/<project>/`, plus `assets/textures/{soft_circle,smoke_puff}.png`.
    They are ingested into the Elodin DB and served like GLBs (db-centric).
 5. **Bind in KDL**: `thruster effect="…"` per nozzle (keep the sim's real
    nozzle geometry; omit `emission_rate` so the authored rate is used), an
-   `environment { sun / ambient / sky }` block, and viewport
-   `hdr=#true ev100=<scene exposure> { bloom … }` — the values transcribe 1:1
-   from the scene RON (sun azimuth/elevation/illuminance, `exposure_ev100`,
-   `bloom_intensity`).
+   `environment { sun / ambient / sky }` block — plus an `atmosphere` child
+   for Earth daylight scenes (`environment.atmosphere: true` here) — and
+   viewport `hdr=#true ev100=<scene exposure> { bloom … }`. Values
+   transcribe 1:1 from the scene RON (sun azimuth/elevation/illuminance,
+   `exposure_ev100`, `bloom_intensity`); for ECEF scenes convert the sun
+   angles from the pad-local Y-up frame into the editor's world frame (the
+   falcon9 KDL documents its conversion).
 6. **Verify**: `ELODIN_SCREENSHOT=shot.png elodin editor <sim>` at a matched
-   moment vs the captures in `shots/<project>/`.
+   moment vs the captures in `shots/<project>/` (the falcon9 example ships
+   `scripts/capture.sh` + `scripts/compare_shots.py` for this loop).
 
 Design + implementation record: `docs/design-thruster-effects-port.md` in the
 workspace root; Elodin-side internals: `docs/crash-course-thruster-particles.md`.

@@ -44,6 +44,27 @@ Rules of thumb:
 - Isolate one effect by setting other emitters' `intensity: 0.0` in a copy of
   the scene (see `assets/scenes/debug_flame_only.scene.ron`).
 
+## Shared effect-property contracts (port to Elodin as-is)
+
+Two optional hanabi property conventions ride inside `.effect` files and are
+honored identically by pyrotechnique and Elodin:
+
+- **`intensity` (scalar, 1.0 = full throttle):** the runtime writes the live
+  `intensity x activity(t)` signal every frame next to the spawner-rate
+  scaling. Wire it into speed/size/color expressions so throttle drives plume
+  length/brightness, not just density. Keep the effect pixel-identical at
+  `intensity = 1.0` (that is the tuned look). Reference: `merlin_core`,
+  `merlin_flame` builders.
+- **`spawn_origin` + `spawn_axis` (vec3, the anchored-trail contract):** the
+  effect stays `SimulationSpace::Local` but runs on a **world-fixed anchor**
+  (here: the world origin; Elodin: a grid-cell entity frozen at ignition).
+  The runtime feeds the moving nozzle pose through the properties each frame,
+  so particles spawn at the nozzle and hang in world space — persistent
+  launch trails that survive Elodin's floating origin. Never use
+  `SimulationSpace::Global` for new effects; it cannot port. Reference:
+  `exhaust_smoke` builder + `anchor_trail_emitters`/`apply_trail_properties`
+  in `src/effects/mod.rs`.
+
 ## What to edit where
 
 | Goal | File | Notes |
@@ -157,8 +178,10 @@ intensity from live sim telemetry. Porting rules that affect authoring here:
 - **Scale contract:** author at the metric size the sim renders (apollo LM:
   5.0 m). Check the target sim's GLB scale before tuning.
 - **Static emitters (`attach: "world"`) must be `SimulationSpace::Local`** so
-  they survive Elodin's floating origin. Moving-emitter Global-space trails
-  (falcon9 `exhaust_smoke`) do not port yet.
+  they survive Elodin's floating origin. Moving-emitter trails port through
+  the anchored-trail contract (`spawn_origin`/`spawn_axis` properties — see
+  above); falcon9 `exhaust_smoke` is the reference and runs live in
+  `elodin/examples/falcon9/`.
 - **Intensity contract:** rate authored in the file = full throttle; both
   tools scale the spawner count by intensity (`Uniform` ranges preserved).
   `activity` timelines are authoring stand-ins for sim viz channels and are
