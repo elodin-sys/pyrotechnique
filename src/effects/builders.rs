@@ -45,6 +45,7 @@ pub fn builtin_effects() -> Vec<(&'static str, &'static str, EffectAsset)> {
         ("falcon9", "merlin_flame", merlin_flame()),
         ("falcon9", "exhaust_smoke", exhaust_smoke()),
         ("falcon9", "pad_smoke", pad_smoke()),
+        ("falcon9", "rcs_dart", rcs_dart()),
         ("apollo-lander", "descent_plume", descent_plume()),
         ("apollo-lander", "descent_glow", descent_glow()),
         ("apollo-lander", "rcs_puff", rcs_puff()),
@@ -175,10 +176,11 @@ fn merlin_core() -> EffectAsset {
     let writer = ExprWriter::new();
     let intensity = writer.add_property("intensity", 1.0f32.into());
 
+    // Spawn volume sized to a Merlin bell exit (~0.9 m), not the full octaweb.
     let init_pos = SetPositionCone3dModifier {
         height: writer.lit(1.2).expr(),
-        base_radius: writer.lit(0.8).expr(),
-        top_radius: writer.lit(0.55).expr(),
+        base_radius: writer.lit(0.5).expr(),
+        top_radius: writer.lit(0.4).expr(),
         dimension: ShapeDimension::Volume,
     };
 
@@ -261,17 +263,18 @@ fn merlin_flame() -> EffectAsset {
     let writer = ExprWriter::new();
     let intensity = writer.add_property("intensity", 1.0f32.into());
 
+    // Near-parallel column (webcast ascent): tight spawn + distant apex.
     let init_pos = SetPositionCone3dModifier {
         height: writer.lit(1.5).expr(),
-        base_radius: writer.lit(1.1).expr(),
-        top_radius: writer.lit(1.5).expr(),
+        base_radius: writer.lit(0.7).expr(),
+        top_radius: writer.lit(0.8).expr(),
         dimension: ShapeDimension::Volume,
     };
 
-    // Diverging cone: velocity radiates from a virtual center "behind" the
-    // nozzle (inside the rocket, +Y), so the column expands downstream like a
-    // real underexpanded plume. Speed scales with throttle (plume length).
-    let center = writer.lit(Vec3::new(0.0, 9.0, 0.0));
+    // Diverging cone: velocity radiates from a virtual center far behind the
+    // nozzle (+Y). Apex at 26 m → ~2° half-angle (was 9 m / ~9°). Speed scales
+    // with throttle (plume length).
+    let center = writer.lit(Vec3::new(0.0, 26.0, 0.0));
     let speed = writer.lit(70.0).uniform(writer.lit(110.0))
         * (writer.lit(0.35) + writer.lit(0.65) * writer.prop(intensity));
     let init_vel = SetAttributeModifier::new(
@@ -300,10 +303,11 @@ fn merlin_flame() -> EffectAsset {
     color.add_key(0.7, Vec4::new(8.0, 2.0, 0.28, 0.5));
     color.add_key(1.0, Vec4::new(2.4, 0.7, 0.12, 0.0));
 
+    // Widths ×0.55 so AlongVelocity billboards stay ≈ body diameter.
     let mut size = Gradient::new();
-    size.add_key(0.0, Vec3::new(5.0, 3.4, 3.4));
-    size.add_key(0.35, Vec3::new(8.5, 5.2, 5.2));
-    size.add_key(1.0, Vec3::new(5.5, 3.6, 3.6));
+    size.add_key(0.0, Vec3::new(5.0, 1.9, 1.9));
+    size.add_key(0.35, Vec3::new(8.5, 2.9, 2.9));
+    size.add_key(1.0, Vec3::new(5.5, 2.0, 2.0));
 
     let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
@@ -596,6 +600,66 @@ fn descent_glow() -> EffectAsset {
         .init(init_age)
         .init(init_lifetime)
         .render(OrientModifier::new(OrientMode::FaceCameraPosition))
+        .render(ParticleTextureModifier {
+            texture_slot: mask_slot,
+            sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Overwrite,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+/// Falcon 9 cold-gas RCS dart: same look as apollo `rcs_puff` but sized for a
+/// 70 m booster at chase-camera distance (~4× apparent area: longer life,
+/// faster spray, larger sprites, slightly brighter).
+fn rcs_dart() -> EffectAsset {
+    let writer = ExprWriter::new();
+
+    let init_pos = SetPositionCone3dModifier {
+        height: writer.lit(0.25).expr(),
+        base_radius: writer.lit(0.14).expr(),
+        top_radius: writer.lit(0.1).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+
+    let init_vel = SetVelocitySphereModifier {
+        center: writer.lit(Vec3::new(0.0, 1.4, 0.0)).expr(),
+        speed: writer.lit(18.0).uniform(writer.lit(32.0)).expr(),
+    };
+
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    let lifetime = writer.lit(0.35).uniform(writer.lit(0.85)).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    let mut color = Gradient::new();
+    color.add_key(0.0, Vec4::new(14.0, 15.5, 19.0, 1.0));
+    color.add_key(0.35, Vec4::new(7.0, 8.0, 11.0, 0.65));
+    color.add_key(1.0, Vec4::new(1.8, 2.1, 3.0, 0.0));
+
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::new(1.6, 0.45, 0.45));
+    size.add_key(0.4, Vec3::new(3.2, 0.85, 0.85));
+    size.add_key(1.0, Vec3::new(2.2, 0.6, 0.6));
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(4096, SpawnerSettings::rate(1200.0.into()), module)
+        .with_name("rcs_dart")
+        .with_simulation_space(SimulationSpace::Local)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_age)
+        .init(init_lifetime)
+        .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
             texture_slot: mask_slot,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,

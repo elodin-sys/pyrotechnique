@@ -115,14 +115,16 @@ to `Add`. If smoke blooms into glare: it's too bright — smoke should stay
 falcon9 (dense atmosphere — drag, buoyancy, billows):
 
 - `merlin_core` (Local/Add): the blinding column. Length ~ speed x lifetime.
-- `merlin_flame` (Local/Blend): orange divergent cone around the core
-  (velocity radiates from a point *behind* the nozzle — move that virtual
-  center to change divergence).
-- `exhaust_smoke` (Global/Blend): the persistent trail. Spawns behind the
-  rocket, hangs for 30-110 s. Its size/alpha gradients set trail width and
-  opacity; the emitter's `activity` curve in the scene thins it with altitude.
-- `pad_smoke` (Global/Blend, `attach: "world"`): lift-off ground clouds;
-  radial blast in the pad plane + buoyancy; `activity` cuts it off at t~12 s.
+  Spawn cone sized to a Merlin bell exit (~0.5 m radius).
+- `merlin_flame` (Local/Blend): near-parallel orange column around the core
+  (velocity radiates from a virtual apex far behind the nozzle — ~26 m for
+  ~2° half-angle; tighten further by moving the apex farther +Y).
+- `exhaust_smoke`: persistent trail via the anchored-trail contract
+  (`spawn_origin`/`spawn_axis`); hangs 30-110 s.
+- `pad_smoke` (`attach: "world"`): lift-off ground clouds; `activity` cuts
+  it off at t~12 s.
+- `rcs_dart` (Local/Add): falcon9-sized cold-gas darts (apollo `rcs_puff` is
+  for the 5 m lander — do not reuse it on the 70 m booster).
 
 apollo-lander (vacuum — no drag, no billowing, everything ballistic):
 
