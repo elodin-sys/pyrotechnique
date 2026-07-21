@@ -50,10 +50,7 @@ pub fn build_base_app(config: BaseConfig) -> App {
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: config.title,
-                    resolution: WindowResolution::new(
-                        config.window_size.0,
-                        config.window_size.1,
-                    ),
+                    resolution: WindowResolution::new(config.window_size.0, config.window_size.1),
                     present_mode: if config.vsync {
                         PresentMode::AutoVsync
                     } else {
@@ -131,7 +128,10 @@ pub fn run_capture(args: CaptureArgs) -> anyhow::Result<()> {
         None => None,
         Some("auto") => {
             let reference = scenario.reference.clone().ok_or_else(|| {
-                anyhow::anyhow!("--compare auto: scenario '{}' has no reference", args.scenario)
+                anyhow::anyhow!(
+                    "--compare auto: scenario '{}' has no reference",
+                    args.scenario
+                )
             })?;
             Some(std::path::PathBuf::from(reference))
         }
@@ -160,16 +160,18 @@ pub fn run_capture(args: CaptureArgs) -> anyhow::Result<()> {
     });
     // Start with dt frozen; the capture state machine enables fixed stepping
     // only once assets are loaded and RNGs are seeded (determinism).
-    app.insert_resource(TimeUpdateStrategy::ManualDuration(std::time::Duration::ZERO))
-        .insert_resource(crate::capture::CaptureConfig {
-            scenario: args.scenario.clone(),
-            end_time,
-            out,
-            compare,
-            seed: args.seed,
-            step,
-        })
-        .add_plugins(crate::capture::CapturePlugin);
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::ZERO,
+    ))
+    .insert_resource(crate::capture::CaptureConfig {
+        scenario: args.scenario.clone(),
+        end_time,
+        out,
+        compare,
+        seed: args.seed,
+        step,
+    })
+    .add_plugins(crate::capture::CapturePlugin);
     app.run();
     Ok(())
 }

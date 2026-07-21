@@ -1,8 +1,8 @@
 (
-  name: "descent_plume",
-  capacity: 32768,
+  name: "descent_glow",
+  capacity: 4096,
   spawner: (
-    count: Single(22000.0),
+    count: Single(1800.0),
     spawn_duration: Single(1.0),
     period: Single(1.0),
     cycle_count: 0,
@@ -51,7 +51,7 @@
   render_modifiers: [
     {
       "bevy_hanabi::modifier::output::OrientModifier": (
-        mode: AlongVelocity,
+        mode: FaceCameraPosition,
         rotation: None,
       ),
     },
@@ -67,15 +67,15 @@
           keys: [
             (
               ratio: 0.0,
-              value: (0.7, 0.22, 0.22),
+              value: (0.7, 0.7, 0.7),
             ),
             (
-              ratio: 0.15,
-              value: (1.3, 0.5, 0.5),
+              ratio: 0.5,
+              value: (1.1, 1.1, 1.1),
             ),
             (
               ratio: 1.0,
-              value: (1.6, 0.58, 0.58),
+              value: (1.4, 1.4, 1.4),
             ),
           ],
         ),
@@ -88,15 +88,11 @@
           keys: [
             (
               ratio: 0.0,
-              value: (9.0, 9.6, 11.0, 0.19),
+              value: (5.0, 5.5, 6.8, 0.045),
             ),
             (
-              ratio: 0.25,
-              value: (6.5, 7.0, 8.4, 0.11),
-            ),
-            (
-              ratio: 0.6,
-              value: (2.4, 2.7, 3.5, 0.035),
+              ratio: 0.5,
+              value: (2.2, 2.6, 3.4, 0.022),
             ),
             (
               ratio: 1.0,
@@ -112,20 +108,20 @@
   motion_integration: PostUpdate,
   module: (
     expressions: [
-      Literal(Scalar(Float(0.12))),
-      Literal(Scalar(Float(0.26))),
-      Literal(Scalar(Float(0.22))),
+      Literal(Scalar(Float(3.5))),
+      Literal(Scalar(Float(0.3))),
+      Literal(Scalar(Float(0.38))),
       Attribute((
         attr: "position",
       )),
-      Literal(Vector(Vec3((0.0, -0.7, 0.0)))),
+      Literal(Vector(Vec3((0.0, -3.6, 0.0)))),
       Binary(
         op: Add,
         left: "#4",
         right: "#5",
       ),
-      Literal(Scalar(Float(20.0))),
-      Literal(Scalar(Float(28.0))),
+      Literal(Scalar(Float(4.0))),
+      Literal(Scalar(Float(7.0))),
       Binary(
         op: UniformRand,
         left: "#7",
@@ -138,8 +134,8 @@
         right: "#9",
       ),
       Literal(Scalar(Float(0.0))),
-      Literal(Scalar(Float(0.1))),
-      Literal(Scalar(Float(0.16))),
+      Literal(Scalar(Float(0.22))),
+      Literal(Scalar(Float(0.36))),
       Binary(
         op: UniformRand,
         left: "#13",

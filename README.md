@@ -62,8 +62,8 @@ cargo run -- gen-effects
 ```
 
 Scenarios — falcon9: `lift-off`, `ascent`, `max-q`, `mid-flight`,
-`smoke-trail`. apollo-lander: `plume-side`, `plume-top`, `rcs-far`,
-`rcs-close`, `ground-effect`, `touchdown`.
+`smoke-trail`. apollo-lander: `plume-side`, `plume-side-90`, `plume-closeup`,
+`plume-top`, `rcs-far`, `rcs-close`, `ground-effect`, `touchdown`.
 
 ## The agent loop
 
@@ -133,6 +133,13 @@ EmitterConfig(
     intensity: 1.0,                  // spawn-rate multiplier
     activity: [(0.0, 1.0), ...],     // optional keyframes over flight time
     attach: "rocket",                // or "world" (e.g. pad smoke, ground dust)
+    light: Some(LightConfig(         // optional nozzle light (particles are
+        color: (1.0, 0.95, 0.88),    // additive and emit no light themselves);
+        intensity_lm: 3000000.0,     // peak lumens at intensity x activity = 1
+        range: 40.0,                 // meters
+        offset_m: 0.8,               // down the exhaust axis, below the exit
+        shadows: true,               // spot_angle_deg: Some(..) for a spotlight
+    )),
 )
 ```
 
@@ -155,7 +162,8 @@ Two scene flags matter for non-Earth, non-rocket scenes:
 | falcon9 | `merlin_flame` | Local | Blend | Orange expanding flame column (diverging-cone velocity) |
 | falcon9 | `exhaust_smoke` | Global | Blend | Persistent world-space trail; 30-110 s lifetimes, grows to ~500 m |
 | falcon9 | `pad_smoke` | Global | Blend | Lift-off ground clouds; radial pad blast + buoyancy, world-attached |
-| apollo-lander | `descent_plume` | Local | Add | Translucent straw-colored vacuum plume; short lifetimes, wide divergence |
+| apollo-lander | `descent_plume` | Local | Add | Solid cool-white vacuum column filling the bell mouth ("First Man" look); high-rate short streaks fuse into a tube |
+| apollo-lander | `descent_glow` | Local | Add | Camera-facing halo wrapping the full column; stacked on the same nozzle, it is what keeps the plume volumetric from every azimuth (stretched streaks foreshorten edge-on). Ports to Elodin as an `effect` layer child of the same `thruster` node |
 | apollo-lander | `rcs_puff` | Local | Add | Sharp white-blue attitude jets, pulsed via emitter `activity` |
 | apollo-lander | `ground_dust` | Global | Blend | Ballistic regolith streaks: flat radial sheet, lunar gravity, no drag |
 
@@ -175,15 +183,38 @@ Techniques worth knowing (see `src/effects/builders.rs`):
 - **Vacuum look**: no drag, real gravity only, `AlongVelocity` orientation on
   thin stretched sprites -> streaks instead of billows (apollo `ground_dust`).
 
-## Elodin port path
+## Elodin port path (live)
 
-These `.effect` files are the prototypes for future Elodin `thruster` presets.
-Once Elodin moves to Bevy/hanabi 0.19+, its `ThrusterParticlesPlugin`
-(`elodin/libs/elodin-editor/src/plugins/thruster_particles/`) can load these
-files through `EffectAssetLoader` instead of hard-coding presets, keeping the
-same KDL emitter schema this scene format mirrors. See
-`docs/crash-course-thruster-particles.md` in the workspace root for the full
-Elodin-side picture.
+Elodin (Bevy/hanabi 0.19) loads these exact `.effect` files:
+`thruster effect="effects/<project>/<name>.effect"` in a KDL schematic renders
+them with intensity driven by live simulation telemetry, and the schematic
+`environment` node + viewport `hdr`/`ev100`/`bloom` reproduce the lighting.
+The apollo-lander example (`elodin/examples/apollo-lander`) runs on the files
+from this repo. Porting checklist:
+
+1. **Author here at the sim's rendered scale.** The scene's `target_height`
+   must match the metric size Elodin renders the GLB at (apollo: 5.0 m).
+   Effects are in meters; a scale mismatch reads immediately.
+2. **Static-emitter effects use `SimulationSpace::Local`** (ground dust, pad
+   smoke): identical visuals here, floating-origin-safe in Elodin. Only
+   moving-emitter trails (`exhaust_smoke`) stay Global — those don't port yet.
+3. **Sim publishes viz channels** (0..1 per effect: thrust fraction,
+   per-nozzle RCS, ground-dust level). Normalization lives sim-side; KDL
+   `intensity` stays a bare component reference.
+4. **Copy files** into the sim's asset tree: `.effect` files under
+   `assets/effects/<project>/`, plus `assets/textures/{soft_circle,smoke_puff}.png`.
+   They are ingested into the Elodin DB and served like GLBs (db-centric).
+5. **Bind in KDL**: `thruster effect="…"` per nozzle (keep the sim's real
+   nozzle geometry; omit `emission_rate` so the authored rate is used), an
+   `environment { sun / ambient / sky }` block, and viewport
+   `hdr=#true ev100=<scene exposure> { bloom … }` — the values transcribe 1:1
+   from the scene RON (sun azimuth/elevation/illuminance, `exposure_ev100`,
+   `bloom_intensity`).
+6. **Verify**: `ELODIN_SCREENSHOT=shot.png elodin editor <sim>` at a matched
+   moment vs the captures in `shots/<project>/`.
+
+Design + implementation record: `docs/design-thruster-effects-port.md` in the
+workspace root; Elodin-side internals: `docs/crash-course-thruster-particles.md`.
 
 ## Layout
 

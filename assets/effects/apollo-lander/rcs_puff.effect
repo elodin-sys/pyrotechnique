@@ -61,15 +61,15 @@
           keys: [
             (
               ratio: 0.0,
-              value: (0.55, 0.16, 0.16),
+              value: (0.4, 0.11, 0.11),
             ),
             (
               ratio: 0.4,
-              value: (1.1, 0.3, 0.3),
+              value: (0.8, 0.21, 0.21),
             ),
             (
               ratio: 1.0,
-              value: (0.8, 0.22, 0.22),
+              value: (0.57, 0.16, 0.16),
             ),
           ],
         ),
@@ -102,12 +102,12 @@
   motion_integration: PostUpdate,
   module: (
     expressions: [
-      Literal(Scalar(Float(0.08))),
       Literal(Scalar(Float(0.06))),
-      Literal(Scalar(Float(0.05))),
-      Literal(Vector(Vec3((0.0, 0.5, 0.0)))),
-      Literal(Scalar(Float(9.0))),
-      Literal(Scalar(Float(16.0))),
+      Literal(Scalar(Float(0.045))),
+      Literal(Scalar(Float(0.035))),
+      Literal(Vector(Vec3((0.0, 0.36, 0.0)))),
+      Literal(Scalar(Float(6.5))),
+      Literal(Scalar(Float(11.5))),
       Binary(
         op: UniformRand,
         left: "#5",

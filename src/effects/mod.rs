@@ -26,6 +26,14 @@ pub struct Emitter {
     pub index: usize,
 }
 
+/// Light child of an emitter entity; intensity follows the emitter's
+/// `intensity x activity(t)` signal (see `apply_emitter_lights`).
+#[derive(Component)]
+pub struct EmitterLight {
+    /// Index into `SceneConfig::emitters`.
+    pub index: usize,
+}
+
 /// Show emitter gizmos (position + exhaust direction). Toggled from the UI.
 #[derive(Resource)]
 pub struct ShowEmitterGizmos(pub bool);
@@ -41,6 +49,7 @@ impl Plugin for EmitterPlugin {
                 bind_effect_materials,
                 recompile_on_asset_change,
                 apply_emitter_intensity,
+                apply_emitter_lights,
                 draw_emitter_gizmos,
             ),
         );
@@ -88,6 +97,10 @@ fn spawn_emitters(
             entity.insert(material);
         }
         let entity = entity.id();
+        if let Some(light) = &config.light {
+            let child = spawn_emitter_light(&mut commands, light, index);
+            commands.entity(entity).add_child(child);
+        }
         // World-attached emitters (e.g. pad smoke) stay put; the rest ride
         // the rocket.
         if config.attach != "world" {
@@ -95,6 +108,47 @@ fn spawn_emitters(
         }
     }
     info!("spawned {} emitters", scene.emitters.len());
+}
+
+/// Spawns the light child for an emitter. Spawned at zero intensity;
+/// `apply_emitter_lights` drives it every frame. Bevy spot lights shine along
+/// local -Z, so the child rotates -Z onto the emitter's -Y exhaust axis.
+fn spawn_emitter_light(
+    commands: &mut Commands,
+    light: &crate::scene::LightConfig,
+    index: usize,
+) -> Entity {
+    let color = Color::srgb(light.color[0], light.color[1], light.color[2]);
+    let transform = Transform {
+        // Exhaust is local -Y; offset drops the light below the bell exit.
+        translation: Vec3::new(0.0, -light.offset_m, 0.0),
+        rotation: Quat::from_rotation_arc(Vec3::NEG_Z, Vec3::NEG_Y),
+        scale: Vec3::ONE,
+    };
+    let mut entity = commands.spawn((EmitterLight { index }, transform, Visibility::default()));
+    match light.spot_angle_deg {
+        Some(angle) => {
+            entity.insert(SpotLight {
+                color,
+                intensity: 0.0,
+                range: light.range,
+                shadow_maps_enabled: light.shadows,
+                outer_angle: (angle.to_radians() * 0.5).clamp(0.0, std::f32::consts::FRAC_PI_2),
+                inner_angle: 0.0,
+                ..default()
+            });
+        }
+        None => {
+            entity.insert(PointLight {
+                color,
+                intensity: 0.0,
+                range: light.range,
+                shadow_maps_enabled: light.shadows,
+                ..default()
+            });
+        }
+    }
+    entity.id()
 }
 
 pub fn emitter_transform(config: &EmitterConfig) -> Transform {
@@ -233,6 +287,39 @@ fn apply_emitter_intensity(
     }
 }
 
+/// Every frame: light luminous power = configured peak scaled by the same
+/// `intensity x activity(t)` multiplier as the spawner.
+fn apply_emitter_lights(
+    clock: Res<SimClock>,
+    scene: Res<SceneConfig>,
+    mut points: Query<(
+        &EmitterLight,
+        Option<&mut PointLight>,
+        Option<&mut SpotLight>,
+    )>,
+) {
+    for (light, point, spot) in &mut points {
+        let Some(config) = scene.emitters.get(light.index) else {
+            continue;
+        };
+        let Some(light_config) = &config.light else {
+            continue;
+        };
+        let multiplier = config.intensity * config.activity_at(clock.t);
+        let lm = if multiplier <= ACTIVITY_CUTOFF {
+            0.0
+        } else {
+            light_config.intensity_lm * multiplier
+        };
+        if let Some(mut point) = point {
+            point.intensity = lm;
+        }
+        if let Some(mut spot) = spot {
+            spot.intensity = lm;
+        }
+    }
+}
+
 fn draw_emitter_gizmos(
     show: Res<ShowEmitterGizmos>,
     bounds: Res<crate::rocket::RocketBounds>,
@@ -249,10 +336,6 @@ fn draw_emitter_gizmos(
         let origin = transform.translation();
         let exhaust = transform.rotation() * Vec3::NEG_Y;
         gizmos.sphere(origin, arrow * 0.1, Color::srgb(1.0, 0.3, 0.1));
-        gizmos.arrow(
-            origin,
-            origin + exhaust * arrow,
-            Color::srgb(1.0, 0.6, 0.1),
-        );
+        gizmos.arrow(origin, origin + exhaust * arrow, Color::srgb(1.0, 0.6, 0.1));
     }
 }

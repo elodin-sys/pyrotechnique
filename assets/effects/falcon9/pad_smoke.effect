@@ -10,7 +10,7 @@
     emit_on_start: true,
   ),
   z_layer_2d: 0.0,
-  simulation_space: Global,
+  simulation_space: Local,
   simulation_condition: WhenVisible,
   prng_seed: 0,
   init_modifiers: [
@@ -233,7 +233,7 @@
       ),
       Literal(Scalar(Float(1.0))),
       Literal(Vector(Vec3((0.0, 2.2, 0.0)))),
-      Literal(Vector(Vec3((0.0, -1000.0, 0.0)))),
+      Literal(Vector(Vec3((0.0, -1002.0, 0.0)))),
       Literal(Vector(Vec3((1000000.0, 1000.0, 1000000.0)))),
       Literal(Scalar(Uint(0))),
     ],

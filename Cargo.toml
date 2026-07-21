@@ -25,3 +25,8 @@ opt-level = 3
 
 [profile.release]
 lto = "thin"
+
+[patch.crates-io]
+# Local-space FaceCamera/AlongVelocity: full inverse affine for camera
+# position in effect space (elodin-sys fork; upstream candidate).
+bevy_hanabi = { git = "https://github.com/elodin-sys/bevy_hanabi", rev = "1b46c8cb2bd9655cea25943c51ba0502055ce2ae" }

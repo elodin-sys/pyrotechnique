@@ -71,6 +71,39 @@ pub struct EmitterConfig {
     /// space — e.g. pad smoke that must stay at the launch pad).
     #[serde(default = "default_attach")]
     pub attach: String,
+    /// Optional dynamic light at the emitter, scaled by the same
+    /// `intensity x activity(t)` signal as the spawn rate. Lights are emitter
+    /// config (not part of the `.effect` file — that is pure bevy_hanabi),
+    /// and the schema mirrors Elodin's `thruster { light ... }` KDL node.
+    #[serde(default)]
+    pub light: Option<LightConfig>,
+}
+
+/// Bevy light attached to an emitter: a point light, or — when
+/// `spot_angle_deg` is set — a spot light aimed down the exhaust axis.
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct LightConfig {
+    /// Linear RGB, 0-1 per channel.
+    pub color: [f32; 3],
+    /// Peak luminous power in lumens (at intensity x activity = 1).
+    /// Rule of thumb: illuminance at distance d is `lm / (4 pi d^2)` lux;
+    /// against a ~100 klx sun you need megalumens to read at meters.
+    pub intensity_lm: f32,
+    /// Range in meters beyond which the light has no effect.
+    pub range: f32,
+    /// Full cone angle in degrees for a spot light down the exhaust axis;
+    /// absent = omnidirectional point light.
+    #[serde(default)]
+    pub spot_angle_deg: Option<f32>,
+    /// Cast shadows (expensive — keep to one or two lights per scene).
+    #[serde(default)]
+    pub shadows: bool,
+    /// Meters down the exhaust axis from the emitter origin. Emitters usually
+    /// sit inside the nozzle (shared with the spawn cone); the light wants to
+    /// hang at/below the exit plane so it doesn't blast the bell interior at
+    /// point-blank range.
+    #[serde(default)]
+    pub offset_m: f32,
 }
 
 fn default_intensity() -> f32 {

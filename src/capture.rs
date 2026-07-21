@@ -63,10 +63,7 @@ impl Plugin for CapturePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CaptureState>()
             .insert_resource(ShowEmitterGizmos(false))
-            .add_systems(
-                Update,
-                (apply_scenario_camera, gate_and_capture).chain(),
-            );
+            .add_systems(Update, (apply_scenario_camera, gate_and_capture).chain());
     }
 }
 

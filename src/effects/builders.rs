@@ -30,10 +30,10 @@ fn init_random_modulation(
     alpha_min: f32,
     alpha_max: f32,
 ) -> SetAttributeModifier {
-    let v = writer.rand(ScalarType::Float) * writer.lit(value_max - value_min)
-        + writer.lit(value_min);
-    let a = writer.rand(ScalarType::Float) * writer.lit(alpha_max - alpha_min)
-        + writer.lit(alpha_min);
+    let v =
+        writer.rand(ScalarType::Float) * writer.lit(value_max - value_min) + writer.lit(value_min);
+    let a =
+        writer.rand(ScalarType::Float) * writer.lit(alpha_max - alpha_min) + writer.lit(alpha_min);
     let rgba = v.clone().vec3(v.clone(), v).vec4_xyz_w(a).pack4x8unorm();
     SetAttributeModifier::new(Attribute::COLOR, rgba.expr())
 }
@@ -46,6 +46,7 @@ pub fn builtin_effects() -> Vec<(&'static str, &'static str, EffectAsset)> {
         ("falcon9", "exhaust_smoke", exhaust_smoke()),
         ("falcon9", "pad_smoke", pad_smoke()),
         ("apollo-lander", "descent_plume", descent_plume()),
+        ("apollo-lander", "descent_glow", descent_glow()),
         ("apollo-lander", "rcs_puff", rcs_puff()),
         ("apollo-lander", "ground_dust", ground_dust()),
     ]
@@ -379,58 +380,156 @@ fn exhaust_smoke() -> EffectAsset {
 // apollo-lander effects
 // ---------------------------------------------------------------------------
 
-/// LM descent engine plume in vacuum: a short, translucent straw-colored
-/// column that expands quickly (no atmosphere to confine it) and fades to a
-/// faint shimmer — see the "First Man" close-up and the Apollo 12 sim targets.
+/// LM descent engine plume in vacuum, core layer: a solid, neutral-cool white
+/// column that fills the full bell mouth — matched against the "First Man"
+/// main-engine close-up. Thousands of short-lived overlapping streaks fuse
+/// into a continuous tube; `descent_glow` adds the camera-facing halo.
+///
+/// Metric contract: sized for the LM GLB at its native ~5.0 m height (what the
+/// Elodin sim renders); see docs/design-thruster-effects-port.md §4.1.
+///
+/// Spawn is **downstream of the bell exit** (not inside the nozzle). Birth
+/// AlongVelocity sprites are ~1 m long; spawning inside the bell hid half of
+/// each sprite behind the hull, and when the vehicle is pitched that
+/// one-sided occlusion shears the bright envelope off the geometric axis
+/// (F0b). Shifting the cone clear of the wall keeps every sprite fully
+/// visible and coaxial with the bell at any attitude.
 fn descent_plume() -> EffectAsset {
     let writer = ExprWriter::new();
 
-    // Nozzle exit disc (DPS bell exit is ~1.5 m across).
+    // Compact spawn disk just outside the exit plane. Emitter origin in the
+    // KDL is ~0.2 m inside the bell; -0.70 m puts the disk ~0.5 m past the
+    // lip so a 0.7 m birth half-length clears the nozzle wall.
     let init_pos = SetPositionCone3dModifier {
-        height: writer.lit(0.3).expr(),
-        base_radius: writer.lit(0.55).expr(),
-        top_radius: writer.lit(0.4).expr(),
+        height: writer.lit(0.12).expr(),
+        base_radius: writer.lit(0.26).expr(),
+        top_radius: writer.lit(0.22).expr(),
         dimension: ShapeDimension::Volume,
     };
+    let shifted = writer.attr(Attribute::POSITION) + writer.lit(Vec3::new(0.0, -0.70, 0.0));
+    let init_shift = SetAttributeModifier::new(Attribute::POSITION, shifted.expr());
 
-    // Diverging cone from a virtual center just above the nozzle; vacuum
-    // plumes spread wider than sea-level ones.
-    let init_vel = SetVelocitySphereModifier {
-        center: writer.lit(Vec3::new(0.0, 1.6, 0.0)).expr(),
-        speed: writer.lit(24.0).uniform(writer.lit(42.0)).expr(),
-    };
+    // Strictly parallel exhaust (not a velocity sphere). A sphere-center spray
+    // gives each AlongVelocity streak its own yaw; under pitch the bright
+    // envelope of those angled streaks reads as a lean off the bell axis (F0b).
+    // Parallel -Y keeps every sprite coaxial with the geometric exhaust.
+    let speed = writer.lit(20.0).uniform(writer.lit(28.0));
+    let init_vel =
+        SetAttributeModifier::new(Attribute::VELOCITY, (writer.lit(Vec3::NEG_Y) * speed).expr());
 
     let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
-    let lifetime = writer.lit(0.05).uniform(writer.lit(0.13)).expr();
+    // Narrow lifetime spread: a wide spread leaves individual streak tips
+    // hanging at random depths (ragged fiber look); the fade-out gradient
+    // shapes the column tail instead.
+    let lifetime = writer.lit(0.10).uniform(writer.lit(0.16)).expr();
     let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
 
-    // Pale straw core cooling to a translucent gray-white haze.
+    // Neutral-cool white (hypergolic vacuum plume, movie-graded): brightest
+    // slightly blue at birth, cooling to translucent blue-gray. Per-sprite
+    // alpha is low; the solid look comes from overlap count.
     let mut color = Gradient::new();
-    color.add_key(0.0, Vec4::new(11.0, 8.5, 5.6, 0.7));
-    color.add_key(0.35, Vec4::new(5.5, 4.4, 3.2, 0.4));
-    color.add_key(0.7, Vec4::new(2.2, 2.0, 1.7, 0.16));
-    color.add_key(1.0, Vec4::new(1.1, 1.05, 1.0, 0.0));
+    color.add_key(0.0, Vec4::new(9.0, 9.6, 11.0, 0.19));
+    color.add_key(0.25, Vec4::new(6.5, 7.0, 8.4, 0.11));
+    color.add_key(0.6, Vec4::new(2.4, 2.7, 3.5, 0.035));
+    color.add_key(1.0, Vec4::new(0.8, 0.95, 1.3, 0.0));
 
-    // Thick relative to length so overlapping sprites fuse into a smooth
-    // column instead of reading as individual sparks.
+    // Slightly shorter birth length than the in-bell version so the first
+    // visible segment sits fully past the lip; across-width still holds so
+    // the sides stay near-parallel like the movie column.
     let mut size = Gradient::new();
-    size.add_key(0.0, Vec3::new(1.4, 0.7, 0.7));
-    size.add_key(0.4, Vec3::new(2.4, 1.1, 1.1));
-    size.add_key(1.0, Vec3::new(1.8, 0.9, 0.9));
+    size.add_key(0.0, Vec3::new(0.7, 0.22, 0.22));
+    size.add_key(0.15, Vec3::new(1.3, 0.50, 0.50));
+    size.add_key(1.0, Vec3::new(1.6, 0.58, 0.58));
 
     let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
     module.add_texture_slot("mask");
 
-    EffectAsset::new(16384, SpawnerSettings::rate(3600.0.into()), module)
+    EffectAsset::new(32768, SpawnerSettings::rate(22000.0.into()), module)
         .with_name("descent_plume")
         .with_simulation_space(SimulationSpace::Local)
         .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
         .init(init_pos)
+        .init(init_shift)
         .init(init_vel)
         .init(init_age)
         .init(init_lifetime)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
+        .render(ParticleTextureModifier {
+            texture_slot: mask_slot,
+            sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Overwrite,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+/// LM descent plume, halo layer: camera-facing soft circles **distributed
+/// along the column axis** (not a single fat mouth blob). A mouth-anchored
+/// isotropic blob cannot encode the bell axis under pitch (F0b); a train of
+/// billboards spanning the visible column tilts rigidly with the vehicle.
+///
+/// Still FaceCamera so azimuth uniformity from F0 is preserved. Stacked on
+/// the same emitter as `descent_plume`.
+fn descent_glow() -> EffectAsset {
+    let writer = ExprWriter::new();
+
+    // Tall thin spawn volume along -Y covering the visible column (~3.5 m).
+    // Cone height is along +Y from the (shifted) base; after the -3.6 m shift
+    // particles occupy roughly y ∈ [-3.6, -0.1] in emitter space.
+    let init_pos = SetPositionCone3dModifier {
+        height: writer.lit(3.5).expr(),
+        base_radius: writer.lit(0.30).expr(),
+        top_radius: writer.lit(0.38).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+    let shifted = writer.attr(Attribute::POSITION) + writer.lit(Vec3::new(0.0, -3.6, 0.0));
+    let init_shift = SetAttributeModifier::new(Attribute::POSITION, shifted.expr());
+
+    // Parallel down-axis drift (same F0b rationale as the core): a radial
+    // velocity sphere would smear FaceCamera billboards off the bell axis.
+    let speed = writer.lit(4.0).uniform(writer.lit(7.0));
+    let init_vel =
+        SetAttributeModifier::new(Attribute::VELOCITY, (writer.lit(Vec3::NEG_Y) * speed).expr());
+
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    let lifetime = writer.lit(0.22).uniform(writer.lit(0.36)).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    // Low alpha, cool white: pure additive fill. Per-sprite energy kept
+    // modest — density along the column replaces a single bright mouth blob.
+    let mut color = Gradient::new();
+    color.add_key(0.0, Vec4::new(5.0, 5.5, 6.8, 0.045));
+    color.add_key(0.5, Vec4::new(2.2, 2.6, 3.4, 0.022));
+    color.add_key(1.0, Vec4::new(0.8, 0.95, 1.3, 0.0));
+
+    // Cap near column diameter so the halo cannot outvote the core axis
+    // under pitch (old peak 2.5 m was ~2x the column and read as lean).
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::splat(0.7));
+    size.add_key(0.5, Vec3::splat(1.1));
+    size.add_key(1.0, Vec3::splat(1.4));
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(4096, SpawnerSettings::rate(1800.0.into()), module)
+        .with_name("descent_glow")
+        .with_simulation_space(SimulationSpace::Local)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
+        .init(init_pos)
+        .init(init_shift)
+        .init(init_vel)
+        .init(init_age)
+        .init(init_lifetime)
+        .render(OrientModifier::new(OrientMode::FaceCameraPosition))
         .render(ParticleTextureModifier {
             texture_slot: mask_slot,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
@@ -452,15 +551,15 @@ fn rcs_puff() -> EffectAsset {
     let writer = ExprWriter::new();
 
     let init_pos = SetPositionCone3dModifier {
-        height: writer.lit(0.08).expr(),
-        base_radius: writer.lit(0.06).expr(),
-        top_radius: writer.lit(0.05).expr(),
+        height: writer.lit(0.06).expr(),
+        base_radius: writer.lit(0.045).expr(),
+        top_radius: writer.lit(0.035).expr(),
         dimension: ShapeDimension::Volume,
     };
 
     let init_vel = SetVelocitySphereModifier {
-        center: writer.lit(Vec3::new(0.0, 0.5, 0.0)).expr(),
-        speed: writer.lit(9.0).uniform(writer.lit(16.0)).expr(),
+        center: writer.lit(Vec3::new(0.0, 0.36, 0.0)).expr(),
+        speed: writer.lit(6.5).uniform(writer.lit(11.5)).expr(),
     };
 
     let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
@@ -474,9 +573,9 @@ fn rcs_puff() -> EffectAsset {
     color.add_key(1.0, Vec4::new(1.2, 1.4, 2.0, 0.0));
 
     let mut size = Gradient::new();
-    size.add_key(0.0, Vec3::new(0.55, 0.16, 0.16));
-    size.add_key(0.4, Vec3::new(1.1, 0.3, 0.3));
-    size.add_key(1.0, Vec3::new(0.8, 0.22, 0.22));
+    size.add_key(0.0, Vec3::new(0.4, 0.11, 0.11));
+    size.add_key(0.4, Vec3::new(0.8, 0.21, 0.21));
+    size.add_key(1.0, Vec3::new(0.57, 0.16, 0.16));
 
     let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
@@ -508,15 +607,17 @@ fn rcs_puff() -> EffectAsset {
 
 /// Lunar regolith blast: no air, so dust doesn't billow — it sprays outward
 /// in a flat ballistic sheet of streaks hugging the surface, arcing back
-/// down under lunar gravity. World-space, attached to the landing site.
+/// down under lunar gravity. Attached to a *static* landing-site emitter;
+/// `SimulationSpace::Local` on a static emitter is world-fixed in practice
+/// and stays safe under floating-origin rebasing (Elodin big_space).
 fn ground_dust() -> EffectAsset {
     let writer = ExprWriter::new();
 
     // Ring just above the surface under the engine.
     let init_pos = SetPositionCircleModifier {
-        center: writer.lit(Vec3::new(0.0, 0.12, 0.0)).expr(),
+        center: writer.lit(Vec3::new(0.0, 0.1, 0.0)).expr(),
         axis: writer.lit(Vec3::Y).expr(),
-        radius: writer.lit(1.4).expr(),
+        radius: writer.lit(1.0).expr(),
         dimension: ShapeDimension::Volume,
     };
 
@@ -524,13 +625,12 @@ fn ground_dust() -> EffectAsset {
     let init_vel = SetVelocityCircleModifier {
         center: writer.lit(Vec3::ZERO).expr(),
         axis: writer.lit(Vec3::Y).expr(),
-        speed: writer.lit(7.0).uniform(writer.lit(22.0)).expr(),
+        speed: writer.lit(5.0).uniform(writer.lit(16.0)).expr(),
     };
 
     // Small random upward component so the sheet has a little thickness.
-    let up_kick = writer.rand(ScalarType::Float) * writer.lit(1.6);
-    let kicked = writer.attr(Attribute::VELOCITY)
-        + writer.lit(0.0).vec3(up_kick, writer.lit(0.0));
+    let up_kick = writer.rand(ScalarType::Float) * writer.lit(1.2);
+    let kicked = writer.attr(Attribute::VELOCITY) + writer.lit(0.0).vec3(up_kick, writer.lit(0.0));
     let init_up_kick = SetAttributeModifier::new(Attribute::VELOCITY, kicked.expr());
 
     let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
@@ -551,24 +651,27 @@ fn ground_dust() -> EffectAsset {
     .with_kill_inside(true);
 
     // Sunlit gray regolith; alpha carries the look (reflective, not emissive).
+    // Bright enough to read against high-albedo terrain (the Elodin landing
+    // site renders near-white at correct exposure).
     let mut color = Gradient::new();
-    color.add_key(0.0, Vec4::new(1.5, 1.42, 1.3, 0.4));
-    color.add_key(0.4, Vec4::new(1.3, 1.24, 1.15, 0.28));
-    color.add_key(1.0, Vec4::new(1.1, 1.06, 1.0, 0.0));
+    color.add_key(0.0, Vec4::new(1.9, 1.8, 1.62, 0.55));
+    color.add_key(0.4, Vec4::new(1.55, 1.48, 1.36, 0.4));
+    color.add_key(1.0, Vec4::new(1.2, 1.15, 1.1, 0.0));
 
     // Stretched along velocity: fine streaks, not puffs.
     let mut size = Gradient::new();
-    size.add_key(0.0, Vec3::new(1.0, 0.14, 0.14));
-    size.add_key(0.4, Vec3::new(2.2, 0.3, 0.3));
-    size.add_key(1.0, Vec3::new(3.2, 0.45, 0.45));
+    size.add_key(0.0, Vec3::new(0.7, 0.1, 0.1));
+    size.add_key(0.4, Vec3::new(1.6, 0.21, 0.21));
+    size.add_key(1.0, Vec3::new(2.3, 0.32, 0.32));
 
     let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
     module.add_texture_slot("mask");
 
+    // Local space on a static emitter == world-fixed (see doc comment).
     EffectAsset::new(32768, SpawnerSettings::rate(4000.0.into()), module)
         .with_name("ground_dust")
-        .with_simulation_space(SimulationSpace::Global)
+        .with_simulation_space(SimulationSpace::Local)
         .with_alpha_mode(bevy_hanabi::AlphaMode::Blend)
         .init(init_pos)
         .init(init_vel)
@@ -596,7 +699,8 @@ fn ground_dust() -> EffectAsset {
 }
 
 /// Lift-off ground clouds: big, slow, buoyant billows fed by the deflected
-/// exhaust, world-space so they stay at the pad as the rocket climbs.
+/// exhaust. Attached to a *static* pad emitter, so `SimulationSpace::Local`
+/// is world-fixed in practice (and floating-origin-safe for the Elodin port).
 fn pad_smoke() -> EffectAsset {
     let writer = ExprWriter::new();
 
@@ -619,8 +723,7 @@ fn pad_smoke() -> EffectAsset {
 
     // Small random upward kick so billow tops crest at different heights.
     let up_kick = writer.rand(ScalarType::Float) * writer.lit(5.0);
-    let kicked = writer.attr(Attribute::VELOCITY)
-        + writer.lit(0.0).vec3(up_kick, writer.lit(0.0));
+    let kicked = writer.attr(Attribute::VELOCITY) + writer.lit(0.0).vec3(up_kick, writer.lit(0.0));
     let init_up_kick = SetAttributeModifier::new(Attribute::VELOCITY, kicked.expr());
 
     let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
@@ -633,9 +736,10 @@ fn pad_smoke() -> EffectAsset {
     let drag = LinearDragModifier::new(writer.lit(1.0).expr());
     let buoyancy = AccelModifier::new(writer.lit(Vec3::new(0.0, 2.2, 0.0)).expr());
 
-    // Kill anything that dips below the pad surface.
+    // Kill anything that dips below the pad surface. Local frame: the pad
+    // emitter sits at world y=2, so the ground plane is local y=-2.
     let kill_ground = KillAabbModifier::new(
-        writer.lit(Vec3::new(0.0, -1000.0, 0.0)).expr(),
+        writer.lit(Vec3::new(0.0, -1002.0, 0.0)).expr(),
         writer.lit(Vec3::new(1.0e6, 1000.0, 1.0e6)).expr(),
     )
     .with_kill_inside(true);
@@ -659,9 +763,10 @@ fn pad_smoke() -> EffectAsset {
     let mut module = writer.finish();
     module.add_texture_slot("smoke");
 
+    // Local space on a static emitter == world-fixed (see doc comment).
     EffectAsset::new(32768, SpawnerSettings::rate(90.0.into()), module)
         .with_name("pad_smoke")
-        .with_simulation_space(SimulationSpace::Global)
+        .with_simulation_space(SimulationSpace::Local)
         .with_alpha_mode(bevy_hanabi::AlphaMode::Blend)
         .init(init_pos)
         .init(init_vel)

@@ -26,8 +26,8 @@ use bevy::ecs::reflect::AppTypeRegistry;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::reflect::ReflectMut;
-use bevy::render::view::screenshot::{save_to_disk, Screenshot};
-use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiPrimaryContextPass};
+use bevy::render::view::screenshot::{Screenshot, save_to_disk};
+use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 use bevy_hanabi::{
     AlphaMode as HanabiAlphaMode, ColorOverLifetimeModifier, CpuValue, EffectAsset, Gradient,
     Modifiers, ParticleEffect, SizeOverLifetimeModifier,
@@ -36,7 +36,7 @@ use bevy_panorbit_camera::PanOrbitCamera;
 
 use crate::app::SimClock;
 use crate::effects::{Emitter, ShowEmitterGizmos};
-use crate::project::{discover_projects, LoadProject, Project, ProjectStatus};
+use crate::project::{LoadProject, Project, ProjectStatus, discover_projects};
 use crate::render::MainCamera;
 use crate::scene::{CameraPreset, SceneConfig};
 
@@ -150,9 +150,7 @@ fn autosave_pending(p: &mut UiParams, force: bool) {
         .ui_state
         .dirty
         .iter()
-        .filter(|(_, dirty)| {
-            force || dirty.last_edit.elapsed().as_secs_f32() >= AUTOSAVE_DEBOUNCE
-        })
+        .filter(|(_, dirty)| force || dirty.last_edit.elapsed().as_secs_f32() >= AUTOSAVE_DEBOUNCE)
         .map(|(id, _)| *id)
         .collect();
     for id in due {
@@ -557,7 +555,11 @@ fn cpu_value_ui(ui: &mut egui::Ui, label: &str, count: &mut SpawnerCount) -> boo
             ui.horizontal(|ui| {
                 ui.label(label);
                 if ui
-                    .add(egui::DragValue::new(&mut v).speed(5.0).range(0.0..=100000.0))
+                    .add(
+                        egui::DragValue::new(&mut v)
+                            .speed(5.0)
+                            .range(0.0..=100000.0),
+                    )
                     .changed()
                 {
                     count.0.set_count(CpuValue::Single(v));
@@ -570,10 +572,18 @@ fn cpu_value_ui(ui: &mut egui::Ui, label: &str, count: &mut SpawnerCount) -> boo
             ui.horizontal(|ui| {
                 ui.label(label);
                 let a = ui
-                    .add(egui::DragValue::new(&mut lo).speed(5.0).range(0.0..=100000.0))
+                    .add(
+                        egui::DragValue::new(&mut lo)
+                            .speed(5.0)
+                            .range(0.0..=100000.0),
+                    )
                     .changed();
                 let b = ui
-                    .add(egui::DragValue::new(&mut hi).speed(5.0).range(0.0..=100000.0))
+                    .add(
+                        egui::DragValue::new(&mut hi)
+                            .speed(5.0)
+                            .range(0.0..=100000.0),
+                    )
                     .changed();
                 if a || b {
                     count.0.set_count(CpuValue::Uniform((lo, hi.max(lo))));
@@ -705,7 +715,10 @@ fn size_gradient_ui(ui: &mut egui::Ui, keys: &mut Vec<(f32, Vec3)>) -> bool {
 fn extract_model(asset: &EffectAsset) -> EffectEditModel {
     let mut model = EffectEditModel::default();
     for modifier in asset.render_modifiers() {
-        if let Some(m) = modifier.as_reflect().downcast_ref::<ColorOverLifetimeModifier>() {
+        if let Some(m) = modifier
+            .as_reflect()
+            .downcast_ref::<ColorOverLifetimeModifier>()
+        {
             model.color_keys = Some(
                 m.gradient
                     .keys()
@@ -713,7 +726,10 @@ fn extract_model(asset: &EffectAsset) -> EffectEditModel {
                     .map(|k| (k.ratio(), k.value.to_array()))
                     .collect(),
             );
-        } else if let Some(m) = modifier.as_reflect().downcast_ref::<SizeOverLifetimeModifier>() {
+        } else if let Some(m) = modifier
+            .as_reflect()
+            .downcast_ref::<SizeOverLifetimeModifier>()
+        {
             model.size_keys = Some(
                 m.gradient
                     .keys()
@@ -836,10 +852,8 @@ fn reference_overlay(ctx: &mut egui::Context, p: &mut UiParams) {
                 let texture =
                     ctx.load_texture(reference.clone(), color, egui::TextureOptions::LINEAR);
                 let scale = (480.0 / rgba.width() as f32).min(1.0);
-                let display = egui::Vec2::new(
-                    rgba.width() as f32 * scale,
-                    rgba.height() as f32 * scale,
-                );
+                let display =
+                    egui::Vec2::new(rgba.width() as f32 * scale, rgba.height() as f32 * scale);
                 p.ui_state.reference_texture = Some((reference.clone(), texture, display));
             }
             Err(e) => {

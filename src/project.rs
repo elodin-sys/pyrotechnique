@@ -17,7 +17,7 @@ use bevy_panorbit_camera::PanOrbitCamera;
 
 use crate::app::SimClock;
 use crate::effects::Emitter;
-use crate::render::{snap_orbit_to_preset, EnvironmentEntity, MainCamera};
+use crate::render::{EnvironmentEntity, MainCamera, snap_orbit_to_preset};
 use crate::rocket::{RocketBounds, RocketRoot};
 use crate::scene::{CameraPreset, SceneConfig};
 
