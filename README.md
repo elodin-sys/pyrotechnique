@@ -14,7 +14,9 @@ Work is organized into **projects**. Two ship built in:
   vacuum descent plume, pulsed RCS quads, and a ballistic regolith dust sheet,
   tuned against film and simulation references.
 
-![editor](targets/falcon9/lift-off.jpeg)
+![ascent](shot-ascent.png)
+![max-q](shot-max-q.png)
+![smoke-trail](shot-smoke-trail.png)
 
 ## Stack
 
