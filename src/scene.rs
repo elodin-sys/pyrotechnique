@@ -31,6 +31,11 @@ pub struct ModelConfig {
     /// The model is uniformly rescaled so its bounding box height equals this
     /// (meters), base centered at the origin, +Y up.
     pub target_height: f32,
+    /// Fixed rotation (degrees, XYZ Euler) applied to the raw GLB before
+    /// normalization, for models whose long axis is not +Y (e.g. a missile
+    /// authored nose-along-+X needs (0, 0, 90)).
+    #[serde(default)]
+    pub rotation_deg: [f32; 3],
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

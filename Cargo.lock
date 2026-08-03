@@ -1110,8 +1110,8 @@ dependencies = [
 
 [[package]]
 name = "bevy_hanabi"
-version = "0.19.0"
-source = "git+https://github.com/elodin-sys/bevy_hanabi?rev=1b46c8cb2bd9655cea25943c51ba0502055ce2ae#1b46c8cb2bd9655cea25943c51ba0502055ce2ae"
+version = "0.19.1-dev"
+source = "git+https://github.com/elodin-sys/bevy_hanabi?rev=e721a3c5f8c730baa6bb9885f08d55237404640b#e721a3c5f8c730baa6bb9885f08d55237404640b"
 dependencies = [
  "anyhow",
  "bevy",
@@ -5820,7 +5820,7 @@ version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c2499c2d826531388872b2268718aed907a39bd785ab0dcfe57fab26283f92e"
 dependencies = [
- "skrifa 0.40.0",
+ "skrifa 0.42.1",
  "yazi",
  "zeno",
 ]

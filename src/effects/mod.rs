@@ -262,12 +262,8 @@ fn is_anchored_trail(asset: &EffectAsset) -> bool {
 }
 
 /// Emitters not yet re-homed by [`anchor_trail_emitters`].
-type UnanchoredEmitters<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static ParticleEffect),
-    (With<Emitter>, Without<TrailAnchored>),
->;
+type UnanchoredEmitters<'w, 's> =
+    Query<'w, 's, (Entity, &'static ParticleEffect), (With<Emitter>, Without<TrailAnchored>)>;
 
 /// Re-homes emitters whose effect declares the anchored-trail contract: the
 /// instance detaches from the rocket and sits at the world origin (identity
@@ -285,10 +281,11 @@ fn anchor_trail_emitters(
         if !is_anchored_trail(asset) {
             continue;
         }
-        commands
-            .entity(entity)
-            .remove::<ChildOf>()
-            .insert((TrailAnchored, Transform::IDENTITY, EffectProperties::default()));
+        commands.entity(entity).remove::<ChildOf>().insert((
+            TrailAnchored,
+            Transform::IDENTITY,
+            EffectProperties::default(),
+        ));
     }
 }
 

@@ -7,7 +7,7 @@ edition = "2024"
 anyhow = "1"
 bevy = { version = "0.19", features = ["jpeg", "webp", "file_watcher"] }
 bevy_egui = "0.40"
-bevy_hanabi = { version = "0.19", default-features = false, features = ["3d"] }
+bevy_hanabi = { version = "0.19.1-dev", default-features = false, features = ["3d"] }
 bevy_panorbit_camera = { version = "0.35", features = ["bevy_egui"] }
 clap = { version = "4", features = ["derive"] }
 image = "0.25"
@@ -29,4 +29,4 @@ lto = "thin"
 [patch.crates-io]
 # Local-space FaceCamera/AlongVelocity: full inverse affine for camera
 # position in effect space (elodin-sys fork; upstream candidate).
-bevy_hanabi = { git = "https://github.com/elodin-sys/bevy_hanabi", rev = "1b46c8cb2bd9655cea25943c51ba0502055ce2ae" }
+bevy_hanabi = { git = "https://github.com/elodin-sys/bevy_hanabi", rev = "e721a3c5f8c730baa6bb9885f08d55237404640b" }

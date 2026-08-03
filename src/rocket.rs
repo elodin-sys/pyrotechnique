@@ -57,6 +57,16 @@ fn ensure_rocket(
     }
     let world_handle: Handle<WorldAsset> =
         asset_server.load(GltfAssetLabel::Scene(0).from_asset(scene.model.path.clone()));
+    // The raw GLB hangs under an inner child carrying the fixed model
+    // rotation, so normalization (on the RocketModel entity) measures the
+    // already-rotated bounds.
+    let deg = scene.model.rotation_deg;
+    let orient = Quat::from_euler(
+        EulerRot::XYZ,
+        deg[0].to_radians(),
+        deg[1].to_radians(),
+        deg[2].to_radians(),
+    );
     commands
         .spawn((
             Name::new("rocket"),
@@ -65,13 +75,21 @@ fn ensure_rocket(
             Visibility::default(),
         ))
         .with_children(|parent| {
-            parent.spawn((
-                Name::new("rocket model"),
-                RocketModel,
-                WorldAssetRoot(world_handle),
-                Transform::default(),
-                Visibility::default(),
-            ));
+            parent
+                .spawn((
+                    Name::new("rocket model"),
+                    RocketModel,
+                    Transform::default(),
+                    Visibility::default(),
+                ))
+                .with_children(|model| {
+                    model.spawn((
+                        Name::new("rocket model orient"),
+                        WorldAssetRoot(world_handle),
+                        Transform::from_rotation(orient),
+                        Visibility::default(),
+                    ));
+                });
         });
 }
 

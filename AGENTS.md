@@ -30,7 +30,8 @@ cargo run -q -- capture --project falcon9 --scenario lift-off --compare auto
 Scenarios — falcon9: `lift-off`, `ascent`, `max-q`, `mid-flight`,
 `smoke-trail`. apollo-lander: `plume-side`, `plume-side-90` (90° azimuth
 consistency check), `plume-closeup` (First Man bell close-up), `plume-top`,
-`rcs-far`, `rcs-close`, `ground-effect`, `touchdown`.
+`rcs-far`, `rcs-close`, `ground-effect`, `touchdown`. rocket (2 m model
+rocket, 6 s boost): `initial-boost`, `mid-boost`, `late-boost`.
 
 Useful flags: `--time <s>` (override capture time), `--seed <n>`, `--size WxH`,
 `--fps <hz>`, `--out <path>`. `--project` also selects debug scenes (e.g.

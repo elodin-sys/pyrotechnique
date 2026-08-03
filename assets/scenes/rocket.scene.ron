@@ -1,0 +1,139 @@
+// Model rocket launch scene: 2 m high-power vehicle, 6 s solid-motor boost.
+//
+// Units: meters, seconds. Rocket frame: base center at origin, +Y up (the GLB
+// is auto-normalized to `target_height`). Emitter position/direction are in
+// the rocket frame and mirror Elodin's `thruster` KDL schema.
+SceneConfig(
+    model: ModelConfig(
+        path: "models/rocket.glb",
+        target_height: 2.0,
+        // GLB is authored nose-along-+X; stand it nose-up.
+        rotation_deg: (0.0, 0.0, 90.0),
+    ),
+    environment: EnvironmentConfig(
+        // Targets are shot under hazy/overcast light: moderate sun, soft look.
+        // Sun behind the vehicle (camera sits at +Z) so the airframe reads as
+        // the dark silhouette every target shows.
+        sun_azimuth_deg: 135.0,
+        sun_elevation_deg: 48.0,
+        sun_illuminance: 65000.0,
+        exposure_ev100: 13.6,
+        bloom_intensity: 0.26,
+        ground_radius: 20000.0,
+        ground_color: (0.24, 0.23, 0.19),
+    ),
+    emitters: [
+        // Motor nozzle at the airframe base; both flame layers share it.
+        // Burnout at t = 6 s: activity snaps the motor off.
+        EmitterConfig(
+            name: "motor_core",
+            effect: "effects/rocket/motor_core.effect",
+            position: (0.0, -0.03, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+            activity: [(0.0, 1.0), (5.75, 1.0), (6.0, 0.0)],
+        ),
+        EmitterConfig(
+            name: "motor_flame",
+            effect: "effects/rocket/motor_flame.effect",
+            position: (0.0, -0.03, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+            activity: [(0.0, 1.0), (5.75, 1.0), (6.0, 0.0)],
+        ),
+        // Persistent trail spawns where the flame has cooled into smoke. The
+        // effect's 3.5 m axial birth volume extends *up-plume* from this
+        // point, so puffs occupy ~2.5-6 m behind the nozzle (anchored-trail
+        // contract keeps them hanging in world space).
+        EmitterConfig(
+            name: "boost_trail",
+            effect: "effects/rocket/boost_trail.effect",
+            position: (0.0, -5.2, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+            activity: [(0.0, 1.0), (5.8, 1.0), (6.05, 0.0)],
+        ),
+        // World-fixed pad cloud, only while the exhaust still hits the ground.
+        EmitterConfig(
+            name: "launch_smoke",
+            effect: "effects/rocket/launch_smoke.effect",
+            attach: "world",
+            position: (0.0, 0.4, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+            activity: [(0.0, 1.0), (2.0, 1.0), (4.0, 0.35), (5.5, 0.0)],
+        ),
+    ],
+    // 6 s boost under thrust (~4-5 g average), then unpowered coast with a
+    // gentle gravity-turn arc downrange (+X).
+    flight: FlightConfig(
+        keyframes: [
+            FlightKey(t: 0.0, pos: (0.0, 0.0, 0.0)),
+            FlightKey(t: 0.5, pos: (0.0, 6.0, 0.0)),
+            FlightKey(t: 1.0, pos: (0.2, 25.0, 0.0)),
+            FlightKey(t: 2.0, pos: (0.8, 100.0, 0.0)),
+            FlightKey(t: 3.0, pos: (2.5, 225.0, 0.0)),
+            FlightKey(t: 4.0, pos: (6.0, 400.0, 0.0)),
+            FlightKey(t: 5.0, pos: (14.0, 620.0, 0.0)),
+            FlightKey(t: 6.0, pos: (30.0, 880.0, 0.0)),
+            FlightKey(t: 8.0, pos: (70.0, 1330.0, 0.0)),
+            FlightKey(t: 10.0, pos: (105.0, 1690.0, 0.0)),
+        ],
+    ),
+    cameras: [
+        // Long lens from ~110 m out, near ground level: vehicle prominent,
+        // flame below it, pad cloud at the frame bottom (initial-boost).
+        CameraPreset(
+            name: "pad_zoom",
+            pos: (0.0, 1.8, 110.0),
+            look_at: (0.0, -0.4, 0.0),
+            fov_deg: 1.62,
+            track_rocket: true,
+        ),
+        // Ground tracker: rocket small near the frame top, trail running off
+        // the bottom edge (mid-boost).
+        CameraPreset(
+            name: "tracker_mid",
+            pos: (0.0, 1.5, 260.0),
+            look_at: (0.0, -23.0, 0.0),
+            fov_deg: 3.2,
+            track_rocket: true,
+        ),
+        // Same tracker later: steeper look-up, longer dispersed trail
+        // (late-boost).
+        CameraPreset(
+            name: "tracker_late",
+            pos: (0.0, 1.5, 260.0),
+            look_at: (0.0, -26.0, 0.0),
+            fov_deg: 2.4,
+            track_rocket: true,
+        ),
+        // Editor sanity view.
+        CameraPreset(
+            name: "wide",
+            pos: (-30.0, 10.0, 90.0),
+            look_at: (0.0, 40.0, 0.0),
+            fov_deg: 45.0,
+        ),
+    ],
+    scenarios: [
+        ScenarioConfig(
+            name: "initial-boost",
+            camera: "pad_zoom",
+            capture_time: 0.55,
+            reference: Some("targets/rocket/initial-boost.png"),
+        ),
+        ScenarioConfig(
+            name: "mid-boost",
+            camera: "tracker_mid",
+            capture_time: 4.0,
+            reference: Some("targets/rocket/mid-boost.png"),
+        ),
+        ScenarioConfig(
+            name: "late-boost",
+            camera: "tracker_late",
+            capture_time: 5.9,
+            reference: Some("targets/rocket/late-boost.png"),
+        ),
+    ],
+)

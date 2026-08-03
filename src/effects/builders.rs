@@ -50,6 +50,10 @@ pub fn builtin_effects() -> Vec<(&'static str, &'static str, EffectAsset)> {
         ("apollo-lander", "descent_glow", descent_glow()),
         ("apollo-lander", "rcs_puff", rcs_puff()),
         ("apollo-lander", "ground_dust", ground_dust()),
+        ("rocket", "motor_core", motor_core()),
+        ("rocket", "motor_flame", motor_flame()),
+        ("rocket", "boost_trail", boost_trail()),
+        ("rocket", "launch_smoke", launch_smoke()),
     ]
 }
 
@@ -484,8 +488,10 @@ fn descent_plume() -> EffectAsset {
     // envelope of those angled streaks reads as a lean off the bell axis (F0b).
     // Parallel -Y keeps every sprite coaxial with the geometric exhaust.
     let speed = writer.lit(20.0).uniform(writer.lit(28.0));
-    let init_vel =
-        SetAttributeModifier::new(Attribute::VELOCITY, (writer.lit(Vec3::NEG_Y) * speed).expr());
+    let init_vel = SetAttributeModifier::new(
+        Attribute::VELOCITY,
+        (writer.lit(Vec3::NEG_Y) * speed).expr(),
+    );
 
     let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
     // Narrow lifetime spread: a wide spread leaves individual streak tips
@@ -565,8 +571,10 @@ fn descent_glow() -> EffectAsset {
     // Parallel down-axis drift (same F0b rationale as the core): a radial
     // velocity sphere would smear FaceCamera billboards off the bell axis.
     let speed = writer.lit(4.0).uniform(writer.lit(7.0));
-    let init_vel =
-        SetAttributeModifier::new(Attribute::VELOCITY, (writer.lit(Vec3::NEG_Y) * speed).expr());
+    let init_vel = SetAttributeModifier::new(
+        Attribute::VELOCITY,
+        (writer.lit(Vec3::NEG_Y) * speed).expr(),
+    );
 
     let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
     let lifetime = writer.lit(0.22).uniform(writer.lit(0.36)).expr();
@@ -815,6 +823,358 @@ fn ground_dust() -> EffectAsset {
         .render(ParticleTextureModifier {
             texture_slot: mask_slot,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        // Modulate: gradient x per-particle random COLOR from init.
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Modulate,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+// ---------------------------------------------------------------------------
+// rocket effects (2 m high-power model rocket, 6 s solid-motor boost)
+// ---------------------------------------------------------------------------
+
+/// Solid-motor core: blinding white-yellow additive column right at the
+/// nozzle, ~1.5-2.5 m long on a 2 m airframe (the initial-boost target shows
+/// the bright column at roughly a vehicle length). Same `intensity` throttle
+/// contract as `merlin_core` (length + brightness), identity at 1.0.
+fn motor_core() -> EffectAsset {
+    let writer = ExprWriter::new();
+    let intensity = writer.add_property("intensity", 1.0f32.into());
+
+    // Spawn volume sized to a ~5 cm motor nozzle.
+    let init_pos = SetPositionCone3dModifier {
+        height: writer.lit(0.06).expr(),
+        base_radius: writer.lit(0.03).expr(),
+        top_radius: writer.lit(0.025).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+
+    // Exhaust along local -Y; length ~ speed x lifetime, throttle-scaled.
+    let speed = writer.lit(28.0).uniform(writer.lit(40.0))
+        * (writer.lit(0.35) + writer.lit(0.65) * writer.prop(intensity));
+    let vel = writer.lit(Vec3::NEG_Y) * speed;
+    let init_vel = SetAttributeModifier::new(Attribute::VELOCITY, vel.expr());
+
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    let lifetime = writer.lit(0.06).uniform(writer.lit(0.11)).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    // Dim with throttle via per-particle COLOR (identity at full throttle).
+    let brightness = writer.lit(0.4) + writer.lit(0.6) * writer.prop(intensity);
+    let rgba = brightness
+        .clone()
+        .vec3(brightness.clone(), brightness)
+        .vec4_xyz_w(writer.lit(1.0))
+        .pack4x8unorm();
+    let init_brightness = SetAttributeModifier::new(Attribute::COLOR, rgba.expr());
+
+    let drag = LinearDragModifier::new(writer.lit(0.5).expr());
+
+    // White-hot at the nozzle cooling through yellow-orange (APCP motor).
+    let mut color = Gradient::new();
+    color.add_key(0.0, Vec4::new(34.0, 30.0, 21.0, 1.0));
+    color.add_key(0.25, Vec4::new(28.0, 14.0, 2.8, 0.9));
+    color.add_key(0.6, Vec4::new(13.0, 4.2, 0.6, 0.55));
+    color.add_key(1.0, Vec4::new(3.2, 0.9, 0.1, 0.0));
+
+    // Stretched along velocity (x = along-velocity axis).
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::new(0.28, 0.08, 0.08));
+    size.add_key(0.4, Vec3::new(0.45, 0.115, 0.115));
+    size.add_key(1.0, Vec3::new(0.22, 0.06, 0.06));
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(4096, SpawnerSettings::rate(3200.0.into()), module)
+        .with_name("motor_core")
+        .with_simulation_space(SimulationSpace::Local)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_age)
+        .init(init_lifetime)
+        .init(init_brightness)
+        .update(drag)
+        .render(OrientModifier::new(OrientMode::AlongVelocity))
+        .render(ParticleTextureModifier {
+            texture_slot: mask_slot,
+            sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        // Modulate: gradient x per-particle COLOR (identity at intensity 1.0).
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Modulate,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+/// Orange flame body around/extending the core: near-parallel column
+/// (virtual apex 0.8 m up-plume, ~2-3 deg half-angle) fading into the smoke
+/// trail ~3-5 m behind the nozzle. `intensity` contract like `merlin_flame`.
+fn motor_flame() -> EffectAsset {
+    let writer = ExprWriter::new();
+    let intensity = writer.add_property("intensity", 1.0f32.into());
+
+    let init_pos = SetPositionCone3dModifier {
+        height: writer.lit(0.08).expr(),
+        base_radius: writer.lit(0.04).expr(),
+        top_radius: writer.lit(0.045).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+
+    // Diverging cone: velocity radiates from a virtual center up-plume (+Y).
+    let center = writer.lit(Vec3::new(0.0, 0.8, 0.0));
+    let speed = writer.lit(18.0).uniform(writer.lit(28.0))
+        * (writer.lit(0.35) + writer.lit(0.65) * writer.prop(intensity));
+    let init_vel = SetAttributeModifier::new(
+        Attribute::VELOCITY,
+        ((writer.attr(Attribute::POSITION) - center).normalized() * speed).expr(),
+    );
+
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    let lifetime = writer.lit(0.06).uniform(writer.lit(0.13)).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    let brightness = writer.lit(0.4) + writer.lit(0.6) * writer.prop(intensity);
+    let rgba = brightness
+        .clone()
+        .vec3(brightness.clone(), brightness)
+        .vec4_xyz_w(writer.lit(1.0))
+        .pack4x8unorm();
+    let init_brightness = SetAttributeModifier::new(Attribute::COLOR, rgba.expr());
+
+    let drag = LinearDragModifier::new(writer.lit(1.2).expr());
+
+    // Saturated orange body (the initial-boost target column).
+    let mut color = Gradient::new();
+    color.add_key(0.0, Vec4::new(24.0, 8.0, 0.9, 1.0));
+    color.add_key(0.3, Vec4::new(17.0, 4.6, 0.5, 0.8));
+    color.add_key(0.7, Vec4::new(7.0, 1.8, 0.25, 0.45));
+    color.add_key(1.0, Vec4::new(2.2, 0.65, 0.12, 0.0));
+
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::new(0.3, 0.14, 0.14));
+    size.add_key(0.35, Vec3::new(0.55, 0.24, 0.24));
+    size.add_key(1.0, Vec3::new(0.38, 0.16, 0.16));
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(4096, SpawnerSettings::rate(2600.0.into()), module)
+        .with_name("motor_flame")
+        .with_simulation_space(SimulationSpace::Local)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Blend)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_age)
+        .init(init_lifetime)
+        .init(init_brightness)
+        .update(drag)
+        .render(OrientModifier::new(OrientMode::AlongVelocity))
+        .render(ParticleTextureModifier {
+            texture_slot: mask_slot,
+            sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        // Modulate: gradient x per-particle COLOR (identity at intensity 1.0).
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Modulate,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+/// Persistent boost trail: the dense cream-white column the mid/late-boost
+/// targets show hanging from vehicle to pad. Anchored-trail contract
+/// (`spawn_origin`/`spawn_axis`) exactly like falcon9 `exhaust_smoke`, sized
+/// down for a 2 m vehicle: puffs a few tens of cm at birth growing to ~20 m
+/// as the trail disperses.
+fn boost_trail() -> EffectAsset {
+    let writer = ExprWriter::new();
+
+    let spawn_origin = writer.add_property("spawn_origin", Vec3::ZERO.into());
+    let spawn_axis = writer.add_property("spawn_axis", Vec3::NEG_Y.into());
+
+    // Birth volume stretched ~5 m along the exhaust axis: per-frame spawn
+    // batches land at one nozzle pose, so the axial spread must cover the
+    // vehicle's inter-frame motion (250+ m/s at 60 fps ~= 4.2 m) or the trail
+    // beads up. Narrow near the vehicle (top), wider downstream (base).
+    let init_pos = SetPositionCone3dModifier {
+        height: writer.lit(5.0).expr(),
+        base_radius: writer.lit(0.35).expr(),
+        top_radius: writer.lit(0.12).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+    let offset_pos = SetAttributeModifier::new(
+        Attribute::POSITION,
+        (writer.attr(Attribute::POSITION) + writer.prop(spawn_origin)).expr(),
+    );
+
+    // Diverge from a virtual center just up-plume of the nozzle so the trail
+    // widens downstream.
+    let center = writer.prop(spawn_origin) - writer.prop(spawn_axis) * writer.lit(0.6);
+    let speed = writer.lit(8.0).uniform(writer.lit(16.0));
+    let init_vel = SetAttributeModifier::new(
+        Attribute::VELOCITY,
+        ((writer.attr(Attribute::POSITION) - center).normalized() * speed).expr(),
+    );
+
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    // Long lifetimes: the trail must persist for the whole flight; the wide
+    // spread desynchronizes growth into billows instead of a uniform tube.
+    let lifetime = writer.lit(18.0).uniform(writer.lit(70.0)).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    // Strong per-puff variation -> cauliflower lumps.
+    let init_modulation = init_random_modulation(&writer, 0.7, 1.0, 0.3, 1.0);
+
+    // Slow to a hang, then gentle wind drift bends the old trail.
+    let drag = LinearDragModifier::new(writer.lit(1.1).expr());
+    let accel = AccelModifier::new(writer.lit(Vec3::new(0.3, 0.25, 0.12)).expr());
+
+    let mut color = Gradient::new();
+    // Brief flame-lit warmth at birth, then bright sunlit cream (AP smoke)
+    // aging toward dusty tan. Alpha ramps in fast (sub-second): the fresh
+    // trail right behind the flame is already dense in the targets.
+    color.add_key(0.0, Vec4::new(1.85, 1.68, 1.45, 0.28));
+    color.add_key(0.002, Vec4::new(1.66, 1.56, 1.4, 0.62));
+    color.add_key(0.35, Vec4::new(1.5, 1.44, 1.3, 0.74));
+    color.add_key(1.0, Vec4::new(1.28, 1.22, 1.12, 0.0));
+
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::splat(0.9));
+    size.add_key(0.012, Vec3::splat(2.0));
+    size.add_key(0.1, Vec3::splat(4.6));
+    size.add_key(0.45, Vec3::splat(10.0));
+    size.add_key(1.0, Vec3::splat(20.0));
+
+    let smoke_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("smoke");
+
+    EffectAsset::new(65536, SpawnerSettings::rate(560.0.into()), module)
+        .with_name("boost_trail")
+        .with_simulation_space(SimulationSpace::Local)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Blend)
+        .init(init_pos)
+        .init(offset_pos)
+        .init(init_vel)
+        .init(init_age)
+        .init(init_lifetime)
+        .init(init_modulation)
+        .update(drag)
+        .update(accel)
+        .render(OrientModifier::new(OrientMode::FaceCameraPosition))
+        .render(ParticleTextureModifier {
+            texture_slot: smoke_slot,
+            sample_mapping: ImageSampleMapping::Modulate,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        // Modulate: gradient x per-particle random COLOR from init.
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Modulate,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+/// Lift-off ground cloud: exhaust splashing off the pad into a low white
+/// billow a few meters across (initial-boost target bottom). Static pad
+/// emitter, so `SimulationSpace::Local` is world-fixed in practice.
+fn launch_smoke() -> EffectAsset {
+    let writer = ExprWriter::new();
+
+    // Small disc at pad level.
+    let init_pos = SetPositionCircleModifier {
+        center: writer.lit(Vec3::ZERO).expr(),
+        axis: writer.lit(Vec3::Y).expr(),
+        radius: writer.lit(1.0).expr(),
+        dimension: ShapeDimension::Volume,
+    };
+
+    // Radial outward blast; buoyancy rolls the sheets up into billows.
+    let init_vel = SetVelocityCircleModifier {
+        center: writer.lit(Vec3::ZERO).expr(),
+        axis: writer.lit(Vec3::Y).expr(),
+        speed: writer.lit(3.0).uniform(writer.lit(10.0)).expr(),
+    };
+
+    // Random upward kick so billow tops crest at different heights.
+    let up_kick = writer.rand(ScalarType::Float) * writer.lit(4.0);
+    let kicked = writer.attr(Attribute::VELOCITY) + writer.lit(0.0).vec3(up_kick, writer.lit(0.0));
+    let init_up_kick = SetAttributeModifier::new(Attribute::VELOCITY, kicked.expr());
+
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    let lifetime = writer.lit(5.0).uniform(writer.lit(14.0)).expr();
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    let init_modulation = init_random_modulation(&writer, 0.6, 1.0, 0.45, 1.0);
+
+    let drag = LinearDragModifier::new(writer.lit(0.9).expr());
+    let buoyancy = AccelModifier::new(writer.lit(Vec3::new(0.0, 1.8, 0.0)).expr());
+
+    // Kill anything dipping below the pad surface (emitter sits ~0.4 m up).
+    let kill_ground = KillAabbModifier::new(
+        writer.lit(Vec3::new(0.0, -1000.4, 0.0)).expr(),
+        writer.lit(Vec3::new(1.0e6, 1000.0, 1.0e6)).expr(),
+    )
+    .with_kill_inside(true);
+
+    let mut color = Gradient::new();
+    // Bright sunlit white with a brief warm flame tint at birth.
+    color.add_key(0.0, Vec4::new(3.2, 2.5, 1.7, 0.85));
+    color.add_key(0.25, Vec4::new(2.0, 1.8, 1.6, 0.62));
+    color.add_key(0.6, Vec4::new(1.5, 1.45, 1.42, 0.38));
+    color.add_key(1.0, Vec4::new(1.2, 1.2, 1.22, 0.0));
+
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::splat(2.5));
+    size.add_key(0.08, Vec3::splat(5.0));
+    size.add_key(0.5, Vec3::splat(9.5));
+    size.add_key(1.0, Vec3::splat(14.0));
+
+    let smoke_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("smoke");
+
+    // Local space on a static emitter == world-fixed (see doc comment).
+    EffectAsset::new(4096, SpawnerSettings::rate(130.0.into()), module)
+        .with_name("launch_smoke")
+        .with_simulation_space(SimulationSpace::Local)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Blend)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_up_kick)
+        .init(init_age)
+        .init(init_lifetime)
+        .init(init_modulation)
+        .update(drag)
+        .update(buoyancy)
+        .update(kill_ground)
+        .render(OrientModifier::new(OrientMode::FaceCameraPosition))
+        .render(ParticleTextureModifier {
+            texture_slot: smoke_slot,
+            sample_mapping: ImageSampleMapping::Modulate,
         })
         .render(SizeOverLifetimeModifier {
             gradient: size,
