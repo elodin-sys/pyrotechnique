@@ -1,0 +1,41 @@
+// Isolate OreSat: black sky, no Earth, no particles.
+SceneConfig(
+    model: ModelConfig(
+        path: "models/oresat-low.glb",
+        target_height: 5.4,
+    ),
+    environment: EnvironmentConfig(
+        sun_azimuth_deg: 38.0,
+        sun_elevation_deg: 72.0,
+        sun_illuminance: 100000.0,
+        exposure_ev100: 13.5,
+        bloom_intensity: 0.22,
+        ground_radius: 0.0,
+        ground_color: (0.0, 0.0, 0.0),
+        atmosphere: false,
+        camera_near: 0.08,
+        camera_far: 20000000.0,
+        ambient_brightness: 0.0,
+    ),
+    emitters: [],
+    flight: FlightConfig(
+        align_to_velocity: false,
+        keyframes: [FlightKey(t: 0.0, pos: (0.0, 0.0, 0.0))],
+    ),
+    cameras: [
+        CameraPreset(
+            name: "day-limb",
+            pos: (7.0, 3.8, 10.5),
+            look_at: (0.0, 2.2, 0.0),
+            fov_deg: 55.0,
+        ),
+    ],
+    scenarios: [
+        ScenarioConfig(
+            name: "bare",
+            camera: "day-limb",
+            capture_time: 0.05,
+            exposure_ev100: Some(13.5),
+        ),
+    ],
+)

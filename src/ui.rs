@@ -102,6 +102,7 @@ struct UiParams<'w, 's> {
     effects: ResMut<'w, Assets<EffectAsset>>,
     registry: Res<'w, AppTypeRegistry>,
     gizmos: ResMut<'w, ShowEmitterGizmos>,
+    emitters_ready: ResMut<'w, crate::effects::EmittersReady>,
     emitters: Query<'w, 's, (Entity, &'static Emitter, &'static ParticleEffect)>,
     camera: Query<
         'w,
@@ -224,6 +225,7 @@ fn top_bar(ctx: &mut egui::Context, p: &mut UiParams) {
                 for (entity, _, _) in &p.emitters {
                     p.commands.entity(entity).despawn();
                 }
+                p.emitters_ready.0 = false;
             }
             ui.label("speed");
             ui.add(
@@ -232,7 +234,12 @@ fn top_bar(ctx: &mut egui::Context, p: &mut UiParams) {
                     .range(0.0..=8.0),
             );
 
-            let duration = p.scene.flight.duration().max(1.0);
+            let duration = p
+                .scene
+                .flight
+                .duration()
+                .max(p.scene.environment.orbit_period_s)
+                .max(1.0);
             ui.label("t");
             let mut t = p.clock.t;
             if ui
@@ -325,7 +332,7 @@ fn snap_camera(p: &mut UiParams, preset: &CameraPreset) {
     let Ok((mut orbit, mut projection, _)) = p.camera.single_mut() else {
         return;
     };
-    crate::render::snap_orbit_to_preset(&mut orbit, &mut projection, preset, rocket_pos);
+    crate::render::snap_orbit_to_preset(&mut orbit, &mut projection, preset, rocket_pos, &p.scene);
 }
 
 // ---------------------------------------------------------------------------

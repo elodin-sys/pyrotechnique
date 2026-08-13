@@ -1,0 +1,222 @@
+(
+  name: "city_lights",
+  capacity: 1500000,
+  spawner: (
+    count: Single(1500000.0),
+    spawn_duration: Single(0.0),
+    period: Single(0.0),
+    cycle_count: 1,
+    starts_active: true,
+    emit_on_start: true,
+  ),
+  z_layer_2d: 0.0,
+  simulation_space: Local,
+  simulation_condition: Always,
+  prng_seed: 0,
+  init_modifiers: [
+    {
+      "bevy_hanabi::modifier::position::SetPositionSphereModifier": (
+        center: "#1",
+        radius: "#2",
+        dimension: Surface,
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "velocity",
+        value: "#3",
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "f32_0",
+        value: "#8",
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "age",
+        value: "#10",
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "lifetime",
+        value: "#9",
+      ),
+    },
+  ],
+  update_modifiers: [
+    {
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "color",
+        value: "#26",
+      ),
+    },
+  ],
+  render_modifiers: [
+    {
+      "bevy_hanabi::modifier::output::OrientModifier": (
+        mode: FaceCameraPosition,
+        rotation: None,
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::output::ParticleTextureModifier": (
+        texture_slot: "#27",
+        sample_mapping: ModulateOpacityFromR,
+      ),
+    },
+    {
+      "pyrotechnique::effects::sphere_map::SphereMapColorModifier": (
+        texture_slot: 1,
+        hdr_boost: 72.0,
+        luma_kill: 0.08,
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::output::SizeOverLifetimeModifier": (
+        gradient: (
+          keys: [
+            (
+              ratio: 0.0,
+              value: (300.0, 300.0, 300.0),
+            ),
+            (
+              ratio: 1.0,
+              value: (300.0, 300.0, 300.0),
+            ),
+          ],
+        ),
+        screen_space_size: false,
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::output::ColorOverLifetimeModifier": (
+        gradient: (
+          keys: [
+            (
+              ratio: 0.0,
+              value: (110.0, 72.0, 22.0, 1.0),
+            ),
+            (
+              ratio: 1.0,
+              value: (110.0, 72.0, 22.0, 1.0),
+            ),
+          ],
+        ),
+        blend: Modulate,
+        mask: (15),
+      ),
+    },
+  ],
+  motion_integration: PostUpdate,
+  module: (
+    expressions: [
+      Literal(Vector(Vec3((0.0, 0.0, 0.0)))),
+      Literal(Scalar(Float(6458140.0))),
+      Literal(Vector(Vec3((0.0, 0.0, 0.0)))),
+      Literal(Scalar(Float(0.35))),
+      Literal(Scalar(Float(0.65))),
+      BuiltIn((
+        operator: Rand(Scalar(Float)),
+      )),
+      Binary(
+        op: Mul,
+        left: "#5",
+        right: "#6",
+      ),
+      Binary(
+        op: Add,
+        left: "#4",
+        right: "#7",
+      ),
+      Literal(Scalar(Float(1000000000.0))),
+      Literal(Scalar(Float(0.0))),
+      Attribute((
+        attr: "position",
+      )),
+      Unary(
+        op: Normalize,
+        expr: "#11",
+      ),
+      Property(1),
+      Unary(
+        op: Normalize,
+        expr: "#13",
+      ),
+      Literal(Scalar(Float(0.08))),
+      Binary(
+        op: Dot,
+        left: "#12",
+        right: "#14",
+      ),
+      Binary(
+        op: Sub,
+        left: "#15",
+        right: "#16",
+      ),
+      Unary(
+        op: Saturate,
+        expr: "#17",
+      ),
+      Attribute((
+        attr: "f32_0",
+      )),
+      Property(3),
+      Binary(
+        op: Mul,
+        left: "#19",
+        right: "#20",
+      ),
+      Binary(
+        op: Mul,
+        left: "#21",
+        right: "#18",
+      ),
+      Ternary(
+        op: Vec3,
+        first: "#22",
+        second: "#22",
+        third: "#22",
+      ),
+      Literal(Scalar(Float(1.0))),
+      Binary(
+        op: Vec4XyzW,
+        left: "#23",
+        right: "#24",
+      ),
+      Unary(
+        op: Pack4x8unorm,
+        expr: "#25",
+      ),
+      Literal(Scalar(Uint(0))),
+    ],
+    properties: [
+      (
+        name: "sun_dir",
+        default_value: Vector(Vec3((0.0, 1.0, 0.0))),
+      ),
+      (
+        name: "view_pos",
+        default_value: Vector(Vec3((0.0, 6778140.0, 0.0))),
+      ),
+      (
+        name: "intensity",
+        default_value: Scalar(Float(0.0)),
+      ),
+    ],
+    texture_layout: (
+      layout: [
+        (
+          name: "mask",
+        ),
+        (
+          name: "night",
+        ),
+      ],
+    ),
+  ),
+  alpha_mode: Add,
+  mesh: None,
+)

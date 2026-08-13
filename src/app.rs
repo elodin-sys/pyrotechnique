@@ -75,6 +75,7 @@ pub fn build_base_app(config: BaseConfig) -> App {
     .add_plugins(crate::render::EnvironmentPlugin)
     .add_plugins(crate::rocket::RocketPlugin)
     .add_plugins(crate::flight::FlightPlugin)
+    .add_plugins(crate::orbit::OrbitPlugin)
     .add_plugins(crate::effects::EmitterPlugin);
     app
 }
@@ -123,7 +124,6 @@ pub fn run_capture(args: CaptureArgs) -> anyhow::Result<()> {
         })?
         .clone();
 
-    let end_time = args.time.unwrap_or(scenario.capture_time);
     let compare = match args.compare.as_deref() {
         None => None,
         Some("auto") => {
@@ -145,6 +145,11 @@ pub fn run_capture(args: CaptureArgs) -> anyhow::Result<()> {
 
     let (w, h) = parse_size(&args.size)?;
     let step = std::time::Duration::from_secs_f64(1.0 / args.fps.max(1.0));
+    // Once-burst skies need at least one sim frame to spawn.
+    let end_time = args
+        .time
+        .unwrap_or(scenario.capture_time)
+        .max(2.0 * step.as_secs_f32());
     let out = args
         .out
         .clone()

@@ -6,6 +6,7 @@
 //! flight path then work in this normalized "rocket frame".
 
 use bevy::camera::primitives::Aabb;
+use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 
 use crate::scene::SceneConfig;
@@ -40,7 +41,7 @@ pub struct RocketPlugin;
 impl Plugin for RocketPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RocketBounds>()
-            .add_systems(Update, (ensure_rocket, normalize_rocket));
+            .add_systems(Update, (ensure_rocket, normalize_rocket, tag_craft_layers));
     }
 }
 
@@ -159,4 +160,25 @@ fn normalize_rocket(
         "rocket normalized: raw extent {:?}, scale {:.4}, height {:.1} m, radius {:.2} m",
         extent, scale, bounds.height, bounds.radius
     );
+}
+
+/// Earthshine lives on layer 1 so it fills the craft without lighting the globe.
+fn tag_craft_layers(
+    rocket: Query<Entity, (With<RocketRoot>, Without<RenderLayers>)>,
+    roots: Query<Entity, With<RocketRoot>>,
+    children: Query<&Children>,
+    untagged: Query<Entity, (With<Mesh3d>, Without<RenderLayers>)>,
+    mut commands: Commands,
+) {
+    for entity in &rocket {
+        commands.entity(entity).insert(RenderLayers::layer(1));
+    }
+    let Ok(root) = roots.single() else {
+        return;
+    };
+    for descendant in children.iter_descendants(root) {
+        if untagged.contains(descendant) {
+            commands.entity(descendant).insert(RenderLayers::layer(1));
+        }
+    }
 }

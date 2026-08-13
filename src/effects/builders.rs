@@ -15,7 +15,7 @@
 
 use bevy::ecs::reflect::AppTypeRegistry;
 use bevy::math::{Vec3, Vec4};
-use bevy_hanabi::graph::expr::PropertyHandle;
+use bevy_hanabi::graph::expr::{ExprHandle, PropertyHandle, WriterExpr};
 use bevy_hanabi::prelude::*;
 use bevy_hanabi::register_modifiers;
 
@@ -55,12 +55,19 @@ pub fn builtin_effects() -> Vec<(&'static str, &'static str, EffectAsset)> {
         ("rocket", "motor_flame", motor_flame()),
         ("rocket", "boost_trail", boost_trail()),
         ("rocket", "launch_smoke", launch_smoke()),
+        ("satellite", "stars_dim", stars_dim()),
+        ("satellite", "stars_bright", stars_bright()),
+        ("satellite", "milky_way", milky_way()),
+        ("satellite", "city_lights", city_lights()),
+        ("satellite", "airglow_green", airglow_green()),
+        ("satellite", "airglow_red", airglow_red()),
     ]
 }
 
 pub fn generate(args: &GenEffectsArgs) -> anyhow::Result<()> {
     let type_registry = AppTypeRegistry::new_with_derived_types();
     register_modifiers(&type_registry);
+    crate::effects::sphere_map::register(&type_registry);
     let registry = type_registry.read();
 
     for (project, name, effect) in builtin_effects() {
@@ -1306,3 +1313,376 @@ fn pad_smoke() -> EffectAsset {
             mask: ColorBlendMask::RGBA,
         })
 }
+
+// ---------------------------------------------------------------------------
+// Satellite (LEO / vacuum): once-burst fields, Local space, no drag.
+// ---------------------------------------------------------------------------
+
+const EARTH_R: f32 = 6_378_140.0;
+const STAR_RADIUS: f32 = 15_000_000.0;
+const VACUUM_LIFETIME: f32 = 1.0e9;
+
+fn power_law_mag(writer: &ExprWriter) -> WriterExpr {
+    let u = writer.rand(ScalarType::Float);
+    u.clone() * u.clone() * u.clone() * u.sqrt()
+}
+
+fn init_age_lifetime(
+    writer: &ExprWriter,
+    lifetime: WriterExpr,
+) -> (SetAttributeModifier, SetAttributeModifier) {
+    let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime.expr());
+    (init_age, init_lifetime)
+}
+
+fn init_zero_velocity(writer: &ExprWriter) -> SetAttributeModifier {
+    SetAttributeModifier::new(Attribute::VELOCITY, writer.lit(Vec3::ZERO).expr())
+}
+
+fn packed_scale(writer: &ExprWriter, scale: WriterExpr) -> ExprHandle {
+    scale
+        .clone()
+        .vec3(scale.clone(), scale)
+        .vec4_xyz_w(writer.lit(1.0))
+        .pack4x8unorm()
+        .expr()
+}
+
+fn star_sphere(writer: &ExprWriter) -> SetPositionSphereModifier {
+    SetPositionSphereModifier {
+        center: writer.lit(Vec3::ZERO).expr(),
+        radius: writer.lit(STAR_RADIUS).expr(),
+        dimension: ShapeDimension::Surface,
+    }
+}
+
+fn earth_shell(writer: &ExprWriter, radius: f32) -> SetPositionSphereModifier {
+    SetPositionSphereModifier {
+        center: writer.lit(Vec3::ZERO).expr(),
+        radius: writer.lit(radius).expr(),
+        dimension: ShapeDimension::Surface,
+    }
+}
+
+fn night_and_limb(
+    writer: &ExprWriter,
+    sun_dir: PropertyHandle,
+    view_pos: PropertyHandle,
+) -> WriterExpr {
+    let n = writer.attr(Attribute::POSITION).normalized();
+    let sun = writer.prop(sun_dir).normalized();
+    let night = (writer.lit(0.08) - n.clone().dot(sun)).saturate();
+    // Geometric limb: n·cam ≈ R/(R+h) ≈ 0.941.
+    let mu = n.dot(writer.prop(view_pos).normalized());
+    let limb = (writer.lit(1.0) - (mu - writer.lit(0.941)).abs() * writer.lit(28.0)).saturate();
+    night * limb
+}
+
+/// World size that subtends `pixels` at [`STAR_RADIUS`] (~55° / 900 px).
+/// Hanabi 0.20 stores `screen_space_size` but never applies it.
+fn star_world_size(pixels: f32) -> f32 {
+    STAR_RADIUS * 0.001067 * pixels
+}
+
+fn star_field(
+    name: &str,
+    capacity: u32,
+    count: f32,
+    pixel_size: f32,
+    hdr: Vec4,
+    color_vary: bool,
+) -> EffectAsset {
+    let writer = ExprWriter::new();
+    let intensity = writer.add_property("intensity", 1.0f32.into());
+
+    let init_pos = star_sphere(&writer);
+    let init_vel = init_zero_velocity(&writer);
+    let mag = power_law_mag(&writer);
+    let init_mag = SetAttributeModifier::new(Attribute::F32_0, mag.expr());
+    let tint = writer.rand(ScalarType::Float);
+    let init_tint = SetAttributeModifier::new(Attribute::F32_1, tint.expr());
+    let (init_age, init_lifetime) = init_age_lifetime(&writer, writer.lit(VACUUM_LIFETIME));
+
+    let scale = writer.attr(Attribute::F32_0) * writer.prop(intensity);
+    let update_color = if color_vary {
+        let t = writer.attr(Attribute::F32_1);
+        let r = (writer.lit(0.72) + writer.lit(0.4) * (writer.lit(1.0) - t.clone())) * scale.clone();
+        let g = writer.lit(0.86) * scale.clone();
+        let b = (writer.lit(0.7) + writer.lit(0.45) * t) * scale;
+        SetAttributeModifier::new(
+            Attribute::COLOR,
+            r.vec3(g, b).vec4_xyz_w(writer.lit(1.0)).pack4x8unorm().expr(),
+        )
+    } else {
+        SetAttributeModifier::new(Attribute::COLOR, packed_scale(&writer, scale))
+    };
+
+    let mut size = Gradient::new();
+    let world_size = star_world_size(pixel_size);
+    size.add_key(0.0, Vec3::splat(world_size));
+    size.add_key(1.0, Vec3::splat(world_size));
+
+    let mut color = Gradient::new();
+    color.add_key(0.0, hdr);
+    color.add_key(1.0, hdr);
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(capacity, SpawnerSettings::once(count.into()), module)
+        .with_name(name)
+        .with_simulation_space(SimulationSpace::Local)
+        .with_simulation_condition(SimulationCondition::Always)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_mag)
+        .init(init_tint)
+        .init(init_age)
+        .init(init_lifetime)
+        .update(update_color)
+        .render(OrientModifier::new(OrientMode::FaceCameraPosition))
+        .render(ParticleTextureModifier {
+            texture_slot: mask_slot,
+            sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Modulate,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+fn stars_dim() -> EffectAsset {
+    star_field(
+        "stars_dim",
+        800_000,
+        800_000.0,
+        0.55,
+        Vec4::new(14.0, 14.0, 18.0, 1.0),
+        false,
+    )
+}
+
+fn stars_bright() -> EffectAsset {
+    star_field(
+        "stars_bright",
+        40_000,
+        40_000.0,
+        1.5,
+        Vec4::new(48.0, 40.0, 62.0, 1.0),
+        true,
+    )
+}
+
+fn milky_way() -> EffectAsset {
+    let writer = ExprWriter::new();
+    let intensity = writer.add_property("intensity", 1.0f32.into());
+
+    let init_pos = star_sphere(&writer);
+    let init_vel = init_zero_velocity(&writer);
+    let mag = power_law_mag(&writer);
+    let init_mag = SetAttributeModifier::new(Attribute::F32_0, mag.expr());
+
+    let n = writer.attr(Attribute::POSITION).normalized();
+    let pole = writer.lit(Vec3::new(0.18, 0.92, 0.35).normalize());
+    let keep = writer.lit(0.22).step(n.dot(pole).abs());
+    let (init_age, init_lifetime) = init_age_lifetime(&writer, writer.lit(VACUUM_LIFETIME) * keep);
+
+    let scale = writer.attr(Attribute::F32_0) * writer.prop(intensity);
+    let update_color = SetAttributeModifier::new(Attribute::COLOR, packed_scale(&writer, scale));
+
+    let mut size = Gradient::new();
+    let mw_size = star_world_size(0.95);
+    size.add_key(0.0, Vec3::splat(mw_size));
+    size.add_key(1.0, Vec3::splat(mw_size));
+
+    let mut color = Gradient::new();
+    let hdr = Vec4::new(11.0, 8.5, 6.0, 0.85);
+    color.add_key(0.0, hdr);
+    color.add_key(1.0, hdr);
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(400_000, SpawnerSettings::once(400_000.0.into()), module)
+        .with_name("milky_way")
+        .with_simulation_space(SimulationSpace::Local)
+        .with_simulation_condition(SimulationCondition::Always)
+        .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
+        .init(init_pos)
+        .init(init_vel)
+        .init(init_mag)
+        .init(init_age)
+        .init(init_lifetime)
+        .update(update_color)
+        .render(OrientModifier::new(OrientMode::FaceCameraPosition))
+        .render(ParticleTextureModifier {
+            texture_slot: mask_slot,
+            sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: size,
+            screen_space_size: false,
+        })
+        .render(ColorOverLifetimeModifier {
+            gradient: color,
+            blend: ColorBlendMode::Modulate,
+            mask: ColorBlendMask::RGBA,
+        })
+}
+
+fn city_lights() -> EffectAsset {
+    let writer = ExprWriter::new();
+    let sun_dir = writer.add_property("sun_dir", Vec3::Y.into());
+    let _view_pos = writer.add_property("view_pos", Vec3::new(0.0, 6_778_140.0, 0.0).into());
+    let intensity = writer.add_property("intensity", 0.0f32.into());
+
+    let init_pos = earth_shell(&writer, EARTH_R + 80_000.0);
+    let init_vel = init_zero_velocity(&writer);
+    let mag = writer.lit(0.35) + writer.lit(0.65) * writer.rand(ScalarType::Float);
+    let init_mag = SetAttributeModifier::new(Attribute::F32_0, mag.expr());
+    let (init_age, init_lifetime) = init_age_lifetime(&writer, writer.lit(VACUUM_LIFETIME));
+
+    let n = writer.attr(Attribute::POSITION).normalized();
+    let sun = writer.prop(sun_dir).normalized();
+    let night = (writer.lit(0.08) - n.dot(sun)).saturate();
+    let scale = writer.attr(Attribute::F32_0) * writer.prop(intensity) * night;
+    let update_color = SetAttributeModifier::new(Attribute::COLOR, packed_scale(&writer, scale));
+
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::splat(300.0));
+    size.add_key(1.0, Vec3::splat(300.0));
+
+    let mut color = Gradient::new();
+    let hdr = Vec4::new(110.0, 72.0, 22.0, 1.0);
+    color.add_key(0.0, hdr);
+    color.add_key(1.0, hdr);
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+    module.add_texture_slot("night");
+
+    EffectAsset::new(
+        1_500_000,
+        SpawnerSettings::once(1_500_000.0.into()),
+        module,
+    )
+    .with_name("city_lights")
+    .with_simulation_space(SimulationSpace::Local)
+    .with_simulation_condition(SimulationCondition::Always)
+    .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
+    .init(init_pos)
+    .init(init_vel)
+    .init(init_mag)
+    .init(init_age)
+    .init(init_lifetime)
+    .update(update_color)
+    .render(OrientModifier::new(OrientMode::FaceCameraPosition))
+    .render(ParticleTextureModifier {
+        texture_slot: mask_slot,
+        sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+    })
+    .render(crate::effects::sphere_map::SphereMapColorModifier {
+        texture_slot: 1,
+        hdr_boost: 72.0,
+        luma_kill: 0.08,
+    })
+    .render(SizeOverLifetimeModifier {
+        gradient: size,
+        screen_space_size: false,
+    })
+    .render(ColorOverLifetimeModifier {
+        gradient: color,
+        blend: ColorBlendMode::Modulate,
+        mask: ColorBlendMask::RGBA,
+    })
+}
+
+fn airglow_shell(name: &str, altitude_m: f32, capacity: u32, size_m: f32, hdr: Vec4) -> EffectAsset {
+    let writer = ExprWriter::new();
+    let sun_dir = writer.add_property("sun_dir", Vec3::Y.into());
+    let view_pos = writer.add_property("view_pos", Vec3::new(0.0, 6_778_140.0, 0.0).into());
+    let intensity = writer.add_property("intensity", 0.0f32.into());
+
+    let init_pos = earth_shell(&writer, EARTH_R + altitude_m);
+    let init_vel = init_zero_velocity(&writer);
+    let mag = writer.lit(0.55) + writer.lit(0.45) * writer.rand(ScalarType::Float);
+    let init_mag = SetAttributeModifier::new(Attribute::F32_0, mag.expr());
+    let (init_age, init_lifetime) = init_age_lifetime(&writer, writer.lit(VACUUM_LIFETIME));
+
+    let vis = night_and_limb(&writer, sun_dir, view_pos);
+    let scale = writer.attr(Attribute::F32_0) * writer.prop(intensity) * vis;
+    let update_color = SetAttributeModifier::new(Attribute::COLOR, packed_scale(&writer, scale));
+
+    let mut size = Gradient::new();
+    size.add_key(0.0, Vec3::splat(size_m));
+    size.add_key(1.0, Vec3::splat(size_m));
+
+    let mut color = Gradient::new();
+    color.add_key(0.0, hdr);
+    color.add_key(1.0, hdr);
+
+    let mask_slot = writer.lit(0u32).expr();
+    let mut module = writer.finish();
+    module.add_texture_slot("mask");
+
+    EffectAsset::new(
+        capacity,
+        SpawnerSettings::once((capacity as f32).into()),
+        module,
+    )
+    .with_name(name)
+    .with_simulation_space(SimulationSpace::Local)
+    .with_simulation_condition(SimulationCondition::Always)
+    .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
+    .init(init_pos)
+    .init(init_vel)
+    .init(init_mag)
+    .init(init_age)
+    .init(init_lifetime)
+    .update(update_color)
+    .render(OrientModifier::new(OrientMode::FaceCameraPosition))
+    .render(ParticleTextureModifier {
+        texture_slot: mask_slot,
+        sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
+    })
+    .render(SizeOverLifetimeModifier {
+        gradient: size,
+        screen_space_size: false,
+    })
+    .render(ColorOverLifetimeModifier {
+        gradient: color,
+        blend: ColorBlendMode::Modulate,
+        mask: ColorBlendMask::RGBA,
+    })
+}
+
+fn airglow_green() -> EffectAsset {
+    airglow_shell(
+        "airglow_green",
+        95_000.0,
+        280_000,
+        16_000.0,
+        Vec4::new(3.5, 26.0, 7.0, 0.85),
+    )
+}
+
+fn airglow_red() -> EffectAsset {
+    airglow_shell(
+        "airglow_red",
+        250_000.0,
+        180_000,
+        36_000.0,
+        Vec4::new(22.0, 6.0, 2.2, 0.55),
+    )
+}
+

@@ -1,0 +1,55 @@
+// Isolate the true-scale Earth globe + raymarched limb (no particles).
+SceneConfig(
+    model: ModelConfig(
+        path: "models/oresat-low.glb",
+        target_height: 5.4,
+    ),
+    environment: EnvironmentConfig(
+        sun_azimuth_deg: 38.0,
+        sun_elevation_deg: 72.0,
+        sun_illuminance: 100000.0,
+        exposure_ev100: 13.5,
+        bloom_intensity: 0.2,
+        ground_radius: 0.0,
+        ground_color: (0.0, 0.0, 0.0),
+        atmosphere: true,
+        camera_near: 0.08,
+        camera_far: 20000000.0,
+        earth: Some(EarthConfig(
+            path: "models/earth.glb",
+            altitude_m: 400000.0,
+            radius_m: 6378140.0,
+            rotation_deg: (30.0, 31.0, 0.0),
+        )),
+        atmosphere_inner_radius: Some(6378140.0),
+        atmosphere_outer_radius: Some(6478140.0),
+        atmosphere_raymarched: true,
+        orbit_period_s: 90.0,
+        ambient_brightness: 0.0,
+    ),
+    emitters: [],
+    flight: FlightConfig(
+        align_to_velocity: false,
+        keyframes: [
+            FlightKey(t: 0.0, pos: (0.0, 0.0, 0.0)),
+            FlightKey(t: 90.0, pos: (0.0, 0.0, 0.0)),
+        ],
+    ),
+    cameras: [
+        CameraPreset(
+            name: "day-limb",
+            pos: (7.0, 3.8, 10.5),
+            look_at: (0.0, 2.2, 0.0),
+            fov_deg: 55.0,
+        ),
+    ],
+    scenarios: [
+        ScenarioConfig(
+            name: "earth",
+            camera: "day-limb",
+            capture_time: 0.05,
+            reference: Some("targets/satellite/iss-day-3.webp"),
+            exposure_ev100: Some(13.5),
+        ),
+    ],
+)

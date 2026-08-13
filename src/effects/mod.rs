@@ -7,13 +7,16 @@
 //! server; on reload the instance is recompiled and its material rebound.
 
 pub mod builders;
+pub mod sphere_map;
 
+use bevy::camera::visibility::NoFrustumCulling;
 use bevy::prelude::*;
 use bevy_hanabi::{
     CpuValue, EffectAsset, EffectMaterial, EffectProperties, EffectSpawner, ParticleEffect,
 };
 
 use crate::app::SimClock;
+use crate::render::{EarthRoot, SkyRoot};
 use crate::rocket::RocketRoot;
 use crate::scene::{EmitterConfig, SceneConfig};
 
@@ -31,6 +34,19 @@ pub const SPAWN_AXIS_PROPERTY: &str = "spawn_axis";
 /// rate, and can wire it into speed/size/color expressions (plume length and
 /// brightness, not just particle density).
 pub const INTENSITY_PROPERTY: &str = "intensity";
+
+/// Direction toward the sun in the effect's local frame. City lights / airglow
+/// fade on the day side.
+pub const SUN_DIR_PROPERTY: &str = "sun_dir";
+
+/// Camera position in the effect's local frame. Airglow uses this to keep the
+/// glow as a limb band instead of a face-on disc.
+pub const VIEW_POS_PROPERTY: &str = "view_pos";
+
+/// True after [`spawn_emitters`] has run for the current world (including a
+/// zero-emitter scene). Cleared on project switch and Restart.
+#[derive(Resource, Default)]
+pub struct EmittersReady(pub bool);
 
 /// Live emitter instance, child of the rocket root.
 #[derive(Component)]
@@ -61,19 +77,25 @@ pub struct EmitterPlugin;
 
 impl Plugin for EmitterPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(ShowEmitterGizmos(true)).add_systems(
-            Update,
-            (
-                spawn_emitters,
-                bind_effect_materials,
-                recompile_on_asset_change,
-                anchor_trail_emitters,
-                apply_trail_properties,
-                apply_emitter_intensity,
-                apply_emitter_lights,
-                draw_emitter_gizmos,
-            ),
-        );
+        {
+            let registry = app.world_mut().resource::<AppTypeRegistry>().clone();
+            sphere_map::register(&registry);
+        }
+        app.insert_resource(ShowEmitterGizmos(true))
+            .init_resource::<EmittersReady>()
+            .add_systems(
+                Update,
+                (
+                    spawn_emitters,
+                    bind_effect_materials,
+                    recompile_on_asset_change,
+                    anchor_trail_emitters,
+                    apply_trail_properties,
+                    apply_emitter_intensity,
+                    apply_emitter_lights,
+                    draw_emitter_gizmos,
+                ),
+            );
     }
 }
 
@@ -87,14 +109,27 @@ fn spawn_emitters(
     asset_server: Res<AssetServer>,
     effects: Res<Assets<EffectAsset>>,
     rocket: Query<Entity, With<RocketRoot>>,
-    existing: Query<(), With<Emitter>>,
+    earth: Query<Entity, With<EarthRoot>>,
+    sky: Query<Entity, With<SkyRoot>>,
+    mut ready: ResMut<EmittersReady>,
 ) {
-    if !existing.is_empty() {
+    if ready.0 {
         return;
     }
     let Ok(rocket) = rocket.single() else {
         return;
     };
+    let needs_earth = scene.emitters.iter().any(|e| e.attach == "earth");
+    let needs_sky = scene.emitters.iter().any(|e| e.attach == "sky");
+    let earth = earth.single().ok();
+    let sky = sky.single().ok();
+    if needs_earth && earth.is_none() {
+        return;
+    }
+    if needs_sky && sky.is_none() {
+        return;
+    }
+
     for (index, config) in scene.emitters.iter().enumerate() {
         let handle: Handle<EffectAsset> = asset_server.load(config.effect.clone());
         let material = effects.get(&handle).and_then(|asset| {
@@ -117,17 +152,32 @@ fn spawn_emitters(
         if let Some(material) = material {
             entity.insert(material);
         }
+        if matches!(config.attach.as_str(), "earth" | "sky") {
+            entity.insert(NoFrustumCulling);
+        }
         let entity = entity.id();
         if let Some(light) = &config.light {
             let child = spawn_emitter_light(&mut commands, light, index);
             commands.entity(entity).add_child(child);
         }
-        // World-attached emitters (e.g. pad smoke) stay put; the rest ride
-        // the rocket.
-        if config.attach != "world" {
-            commands.entity(rocket).add_child(entity);
+        match config.attach.as_str() {
+            "world" => {}
+            "earth" => {
+                if let Some(earth) = earth {
+                    commands.entity(earth).add_child(entity);
+                }
+            }
+            "sky" => {
+                if let Some(sky) = sky {
+                    commands.entity(sky).add_child(entity);
+                }
+            }
+            _ => {
+                commands.entity(rocket).add_child(entity);
+            }
         }
     }
+    ready.0 = true;
     info!("spawned {} emitters", scene.emitters.len());
 }
 
@@ -185,6 +235,7 @@ pub fn emitter_transform(config: &EmitterConfig) -> Transform {
 fn slot_image(name: &str, asset_server: &AssetServer) -> Handle<Image> {
     match name {
         "smoke" => asset_server.load("textures/smoke_puff.png"),
+        "night" => asset_server.load("textures/earth_night.png"),
         // "mask" and anything unknown get the soft round falloff.
         _ => asset_server.load("textures/soft_circle.png"),
     }
@@ -195,7 +246,13 @@ fn effect_material_for(asset: &EffectAsset, asset_server: &AssetServer) -> Effec
         .texture_layout()
         .layout
         .iter()
-        .map(|slot| slot_image(&slot.name, asset_server))
+        .map(|slot| {
+            let handle = slot_image(&slot.name, asset_server);
+            if slot.name == "night" {
+                info!("bound night-lights texture for effect '{}'", asset.name);
+            }
+            handle
+        })
         .collect();
     EffectMaterial { images }
 }
@@ -364,10 +421,13 @@ fn apply_emitter_intensity(
             continue;
         };
         let multiplier = config.intensity * config.activity_at(clock.t);
-        if asset
-            .properties()
-            .iter()
-            .any(|p| p.name() == INTENSITY_PROPERTY)
+        // Sky/earth once-bursts get intensity from orbit.rs (day/night).
+        if config.attach != "sky"
+            && config.attach != "earth"
+            && asset
+                .properties()
+                .iter()
+                .any(|p| p.name() == INTENSITY_PROPERTY)
         {
             let clamped = multiplier.clamp(0.0, 1.0);
             match properties {
@@ -378,6 +438,14 @@ fn apply_emitter_intensity(
                     commands.entity(entity).insert(instance);
                 }
             }
+        }
+        // Once-burst fields (stars, cities, airglow) must spawn at full
+        // capacity on the first sim frame. Dimming is the intensity / sun_dir
+        // property, not spawn count.
+        if asset.spawner.is_once() {
+            spawner.active = true;
+            spawner.settings = asset.spawner;
+            continue;
         }
         if multiplier <= ACTIVITY_CUTOFF {
             spawner.active = false;

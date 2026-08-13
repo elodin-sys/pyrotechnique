@@ -6,13 +6,17 @@ built for both humans and AI agents. Author GPU particle effects as plain
 bloom-lit environment, and capture deterministic screenshots to compare
 against reference photos.
 
-Work is organized into **projects**. Two ship built in:
+Work is organized into **projects**. Four ship built in:
 
 - **falcon9** — SpaceX Falcon 9 flying an animated launch profile with four
   layered exhaust effects, tuned against real launch photography.
 - **apollo-lander** — Apollo Lunar Module powered descent on an airless Moon:
   vacuum descent plume, pulsed RCS quads, and a ballistic regolith dust sheet,
   tuned against film and simulation references.
+- **rocket** — 2 m model rocket, 6 s boost, motor core/flame plus launch smoke.
+- **satellite** — OreSat in LEO against true-scale Earth. Stars, Milky Way,
+  city lights, and airglow are Hanabi particles (no cubemap); a 90 s sim
+  orbit is one compressed day/night cycle.
 
 ![ascent](shot-ascent.png)
 ![max-q](shot-max-q.png)
@@ -65,7 +69,10 @@ cargo run -- gen-effects
 
 Scenarios — falcon9: `lift-off`, `ascent`, `max-q`, `mid-flight`,
 `smoke-trail`. apollo-lander: `plume-side`, `plume-side-90`, `plume-closeup`,
-`plume-top`, `rcs-far`, `rcs-close`, `ground-effect`, `touchdown`.
+`plume-top`, `rcs-far`, `rcs-close`, `ground-effect`, `touchdown`. satellite:
+`day-limb`, `day-look-down`, `dusk-terminator`, `night-airglow`,
+`night-cities`, `starboard`, `milky-way` (`cargo run -- edit satellite`;
+capture times *are* lighting: t=0 noon, 22.5 dusk, 45 midnight, 67.5 dawn).
 
 ## The agent loop
 
@@ -134,7 +141,7 @@ EmitterConfig(
     direction: (0.0, -1.0, 0.0),     // exhaust direction
     intensity: 1.0,                  // spawn-rate multiplier
     activity: [(0.0, 1.0), ...],     // optional keyframes over flight time
-    attach: "rocket",                // or "world" (e.g. pad smoke, ground dust)
+    attach: "rocket",                // "rocket" | "world" | "earth" | "sky"
     light: Some(LightConfig(         // optional nozzle light (particles are
         color: (1.0, 0.95, 0.88),    // additive and emit no light themselves);
         intensity_lm: 3000000.0,     // peak lumens at intensity x activity = 1
@@ -149,12 +156,18 @@ Conventions: effects emit along **local -Y**; the emitter entity rotates -Y
 onto `direction`. The GLB is auto-normalized (height = `target_height`, base
 at origin, +Y up).
 
-Two scene flags matter for non-Earth, non-rocket scenes:
+Scene flags for non-Earth, non-rocket, and LEO scenes:
 
 - `environment.atmosphere: false` — airless body: no sky scattering, black
   clear color (apollo-lander).
 - `flight.align_to_velocity: false` — keep the vehicle upright instead of
-  pitching +Y along the path tangent (landers descend base-first).
+  pitching +Y along the path tangent (landers, satellite).
+- `environment.ground_radius: 0` — skip the pad disc (satellite).
+- `environment.camera_near` / `camera_far` — LEO needs `far ≥ 2e7` or Earth
+  clips. Defaults 0.1 / 1000 leave falcon9/apollo unchanged.
+- `environment.earth` — second GLB at true radius, not height-normalized.
+- `attach: "earth"` / `"sky"` — parent emitters to `EarthRoot` or `SkyRoot`
+  (inertial frame that rotates once per `orbit_period_s`).
 
 ## The built-in effects
 
@@ -168,6 +181,9 @@ Two scene flags matter for non-Earth, non-rocket scenes:
 | apollo-lander | `descent_glow` | Local | Add | Camera-facing halo wrapping the full column; stacked on the same nozzle, it is what keeps the plume volumetric from every azimuth (stretched streaks foreshorten edge-on). Ports to Elodin as an `effect` layer child of the same `thruster` node |
 | apollo-lander | `rcs_puff` | Local | Add | Sharp white-blue attitude jets, pulsed via emitter `activity` |
 | apollo-lander | `ground_dust` | Global | Blend | Ballistic regolith streaks: flat radial sheet, lunar gravity, no drag |
+| satellite | `stars_dim` / `stars_bright` / `milky_way` | Local | Add | Once-burst star field on a 15,000 km sphere; `intensity` from orbit phase (0 at noon) |
+| satellite | `city_lights` | Local | Add | Black Marble on an Earth shell; `sun_dir` + `intensity` kill the day side |
+| satellite | `airglow_green` / `airglow_red` | Local | Add | Night limb shells at ~95 km and ~250 km |
 
 Techniques worth knowing (see `src/effects/builders.rs`):
 
@@ -234,7 +250,8 @@ src/
 ├── main.rs        CLI (edit | capture | gen-effects), project selection
 ├── app.rs         shared app assembly, SimClock
 ├── project.rs     Project resource, discovery, runtime project switching
-├── render.rs      HDR camera, atmosphere, sun, ground (rebuilt per project)
+├── render.rs      HDR camera, atmosphere, sun, ground, Earth, SkyRoot
+├── orbit.rs       90 s LEO day/night: SkyRoot spin, star/city intensity
 ├── rocket.rs      GLB load + normalization (RocketBounds)
 ├── flight.rs      flight-path -> rocket transform
 ├── scene.rs       scene RON schema + sampling helpers
@@ -242,11 +259,12 @@ src/
 ├── ui.rs          egui editor panels, project picker, auto-save
 └── effects/
     ├── mod.rs         emitter spawning, intensity, hot reload, gizmos
+    ├── sphere_map.rs  fragment equirect sample (city lights / Black Marble)
     └── builders.rs    Rust builders for the built-in effects + sprites
 assets/
 ├── effects/<project>/   *.effect (Hanabi RON) — the tunable artifacts
 ├── scenes/              <project>.scene.ron (+ debug variants)
-├── textures/            generated sprites (soft_circle, smoke_puff)
+├── textures/            generated sprites (soft_circle, smoke_puff) + earth_night.png
 └── models/              vehicle GLBs (shared)
 targets/<project>/       reference images
 shots/<project>/         capture output (gitignored)

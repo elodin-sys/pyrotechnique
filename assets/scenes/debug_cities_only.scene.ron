@@ -1,0 +1,66 @@
+// Isolate city lights on the night Earth (stars/airglow off).
+SceneConfig(
+    model: ModelConfig(
+        path: "models/oresat-low.glb",
+        target_height: 5.4,
+    ),
+    environment: EnvironmentConfig(
+        sun_azimuth_deg: 38.0,
+        sun_elevation_deg: 72.0,
+        sun_illuminance: 100000.0,
+        exposure_ev100: 9.0,
+        bloom_intensity: 0.34,
+        ground_radius: 0.0,
+        ground_color: (0.0, 0.0, 0.0),
+        atmosphere: true,
+        camera_near: 0.08,
+        camera_far: 20000000.0,
+        earth: Some(EarthConfig(
+            path: "models/earth.glb",
+            altitude_m: 400000.0,
+            radius_m: 6378140.0,
+            rotation_deg: (30.0, 31.0, 0.0),
+        )),
+        atmosphere_inner_radius: Some(6378140.0),
+        atmosphere_outer_radius: Some(6478140.0),
+        atmosphere_raymarched: true,
+        orbit_period_s: 90.0,
+        night_exposure_ev100: Some(9.0),
+        earthshine_illuminance: 700.0,
+        ambient_brightness: 0.0,
+    ),
+    emitters: [
+        EmitterConfig(
+            name: "city_lights",
+            effect: "effects/satellite/city_lights.effect",
+            attach: "earth",
+            position: (0.0, 0.0, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+        ),
+    ],
+    flight: FlightConfig(
+        align_to_velocity: false,
+        keyframes: [
+            FlightKey(t: 0.0, pos: (0.0, 0.0, 0.0)),
+            FlightKey(t: 90.0, pos: (0.0, 0.0, 0.0)),
+        ],
+    ),
+    cameras: [
+        CameraPreset(
+            name: "night-cities",
+            pos: (7.0, 3.8, 10.5),
+            look_at: (0.0, 2.2, 0.0),
+            fov_deg: 55.0,
+        ),
+    ],
+    scenarios: [
+        ScenarioConfig(
+            name: "cities",
+            camera: "night-cities",
+            capture_time: 45.0,
+            reference: Some("targets/satellite/low-earth-orbit-night-lights-on.jpeg"),
+            exposure_ev100: Some(9.0),
+        ),
+    ],
+)

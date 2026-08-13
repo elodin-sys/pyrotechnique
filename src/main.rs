@@ -12,6 +12,7 @@ mod app;
 mod capture;
 mod effects;
 mod flight;
+mod orbit;
 mod project;
 mod render;
 mod rocket;
