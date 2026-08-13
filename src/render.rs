@@ -34,6 +34,10 @@ pub struct EarthRoot;
 #[derive(Component)]
 pub struct Earthshine;
 
+/// Dim night fill on the globe (layer 0). Not the craft.
+#[derive(Component)]
+pub struct NightGlobeFill;
+
 /// Atmosphere whose [`GlobalTransform`] is the planet center (Earth).
 #[derive(Component)]
 pub struct OrbitalAtmosphere;
@@ -272,14 +276,29 @@ fn ensure_environment(
             Earthshine,
             Name::new("earthshine"),
             DirectionalLight {
-                color: Color::srgb(0.55, 0.72, 1.0),
+                color: Color::srgb(0.72, 0.78, 0.88),
                 illuminance: env.earthshine_illuminance,
                 shadow_maps_enabled: false,
                 ..default()
             },
             Transform::from_rotation(Quat::from_rotation_arc(Vec3::NEG_Z, Vec3::Y)),
-            // Craft only: lighting the globe would wash out the night disc.
             RenderLayers::layer(1),
+        ));
+    }
+
+    if env.night_globe_illuminance > 0.0 {
+        commands.spawn((
+            EnvironmentEntity,
+            NightGlobeFill,
+            Name::new("night_globe_fill"),
+            DirectionalLight {
+                color: Color::srgb(0.55, 0.48, 0.40),
+                illuminance: env.night_globe_illuminance,
+                shadow_maps_enabled: false,
+                ..default()
+            },
+            Transform::from_rotation(Quat::from_rotation_arc(Vec3::Z, Vec3::Y)),
+            RenderLayers::layer(0),
         ));
     }
 

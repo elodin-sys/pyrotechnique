@@ -26,7 +26,8 @@ SceneConfig(
         atmosphere_raymarched: true,
         orbit_period_s: 90.0,
         night_exposure_ev100: Some(9.0),
-        earthshine_illuminance: 700.0,
+        earthshine_illuminance: 2500.0,
+        night_globe_illuminance: 120.0,
         ambient_brightness: 0.0,
     ),
     emitters: [

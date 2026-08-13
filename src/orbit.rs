@@ -10,7 +10,7 @@ use std::f32::consts::TAU;
 
 use crate::app::SimClock;
 use crate::effects::{Emitter, INTENSITY_PROPERTY, SUN_DIR_PROPERTY, VIEW_POS_PROPERTY};
-use crate::render::{EarthRoot, Earthshine, MainCamera, SceneSun, SkyRoot};
+use crate::render::{EarthRoot, Earthshine, MainCamera, NightGlobeFill, SceneSun, SkyRoot};
 use crate::scene::SceneConfig;
 
 pub struct OrbitPlugin;
@@ -33,6 +33,11 @@ pub fn sun_elevation(to_sun: Vec3) -> f32 {
 /// Star visibility: 0 in daylight, 1 in eclipse, smooth through terminator.
 pub fn star_visibility(elevation: f32) -> f32 {
     ((0.25 - elevation) / 0.35).clamp(0.0, 1.0)
+}
+
+/// Nightglow: stays off through dusk so Rayleigh fire is not painted green.
+pub fn nightglow_visibility(elevation: f32) -> f32 {
+    ((-0.05 - elevation) / 0.3).clamp(0.0, 1.0)
 }
 
 fn orbit_phase(clock: &SimClock, period: f32) -> f32 {
@@ -71,7 +76,8 @@ fn apply_orbit_properties(
     earth_gt: Query<&GlobalTransform, With<EarthRoot>>,
     sun: Query<&GlobalTransform, With<SceneSun>>,
     camera_gt: Query<&GlobalTransform, With<MainCamera>>,
-    mut earthshine: Query<&mut DirectionalLight, With<Earthshine>>,
+    mut earthshine: Query<&mut DirectionalLight, (With<Earthshine>, Without<NightGlobeFill>)>,
+    mut globe_fill: Query<&mut DirectionalLight, (With<NightGlobeFill>, Without<Earthshine>)>,
     mut camera: Query<&mut Exposure, With<MainCamera>>,
     emitters: Query<(Entity, &Emitter, Option<&mut EffectProperties>)>,
     capturing: Option<Res<crate::capture::CaptureConfig>>,
@@ -87,6 +93,8 @@ fn apply_orbit_properties(
         .unwrap_or(Vec3::Y);
     let elevation = sun_elevation(to_sun_world);
     let star_vis = star_visibility(elevation);
+    let nightglow_vis = nightglow_visibility(elevation);
+    let night_fill = 1.0 - elevation.max(0.0);
     let earth_rot = earth_gt
         .single()
         .map(|gt| gt.rotation())
@@ -102,7 +110,10 @@ fn apply_orbit_properties(
     }
 
     if let Ok(mut light) = earthshine.single_mut() {
-        light.illuminance = env.earthshine_illuminance * (1.0 - elevation.max(0.0));
+        light.illuminance = env.earthshine_illuminance * night_fill;
+    }
+    if let Ok(mut light) = globe_fill.single_mut() {
+        light.illuminance = env.night_globe_illuminance * night_fill;
     }
 
     let view_pos = match (camera_gt.single(), earth_gt.single()) {
@@ -124,16 +135,23 @@ fn apply_orbit_properties(
                 properties,
                 &[(INTENSITY_PROPERTY, star_vis.into())],
             ),
-            "earth" => set_properties(
-                &mut commands,
-                entity,
-                properties,
-                &[
-                    (INTENSITY_PROPERTY, star_vis.into()),
-                    (SUN_DIR_PROPERTY, to_sun_earth.into()),
-                    (VIEW_POS_PROPERTY, view_pos.into()),
-                ],
-            ),
+            "earth" => {
+                let vis = if config.name.starts_with("airglow") {
+                    nightglow_vis
+                } else {
+                    star_vis
+                };
+                set_properties(
+                    &mut commands,
+                    entity,
+                    properties,
+                    &[
+                        (INTENSITY_PROPERTY, vis.into()),
+                        (SUN_DIR_PROPERTY, to_sun_earth.into()),
+                        (VIEW_POS_PROPERTY, view_pos.into()),
+                    ],
+                );
+            }
             _ => {}
         }
     }

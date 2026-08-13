@@ -1,8 +1,8 @@
 (
   name: "airglow_green",
-  capacity: 280000,
+  capacity: 520000,
   spawner: (
-    count: Single(280000.0),
+    count: Single(520000.0),
     spawn_duration: Single(0.0),
     period: Single(0.0),
     cycle_count: 1,
@@ -23,26 +23,32 @@
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
-        attribute: "velocity",
-        value: "#3",
-      ),
-    },
-    {
-      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
-        attribute: "f32_0",
+        attribute: "position",
         value: "#8",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "velocity",
+        value: "#9",
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
+        attribute: "f32_0",
+        value: "#14",
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "age",
-        value: "#10",
+        value: "#16",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "lifetime",
-        value: "#9",
+        value: "#15",
       ),
     },
   ],
@@ -50,7 +56,7 @@
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "color",
-        value: "#38",
+        value: "#52",
       ),
     },
   ],
@@ -63,7 +69,7 @@
     },
     {
       "bevy_hanabi::modifier::output::ParticleTextureModifier": (
-        texture_slot: "#39",
+        texture_slot: "#53",
         sample_mapping: ModulateOpacityFromR,
       ),
     },
@@ -73,11 +79,11 @@
           keys: [
             (
               ratio: 0.0,
-              value: (16000.0, 16000.0, 16000.0),
+              value: (32000.0, 32000.0, 32000.0),
             ),
             (
               ratio: 1.0,
-              value: (16000.0, 16000.0, 16000.0),
+              value: (32000.0, 32000.0, 32000.0),
             ),
           ],
         ),
@@ -90,11 +96,11 @@
           keys: [
             (
               ratio: 0.0,
-              value: (3.5, 26.0, 7.0, 0.85),
+              value: (0.12, 2.8, 0.65, 0.042),
             ),
             (
               ratio: 1.0,
-              value: (3.5, 26.0, 7.0, 0.85),
+              value: (0.12, 2.8, 0.65, 0.042),
             ),
           ],
         ),
@@ -108,21 +114,40 @@
     expressions: [
       Literal(Vector(Vec3((0.0, 0.0, 0.0)))),
       Literal(Scalar(Float(6473140.0))),
+      Attribute((
+        attr: "position",
+      )),
+      Unary(
+        op: Normalize,
+        expr: "#3",
+      ),
+      Literal(Scalar(Float(6468140.0))),
+      Literal(Scalar(Float(6478140.0))),
+      Binary(
+        op: UniformRand,
+        left: "#5",
+        right: "#6",
+      ),
+      Binary(
+        op: Mul,
+        left: "#4",
+        right: "#7",
+      ),
       Literal(Vector(Vec3((0.0, 0.0, 0.0)))),
-      Literal(Scalar(Float(0.55))),
-      Literal(Scalar(Float(0.45))),
+      Literal(Scalar(Float(0.96))),
+      Literal(Scalar(Float(0.04))),
       BuiltIn((
         operator: Rand(Scalar(Float)),
       )),
       Binary(
         op: Mul,
-        left: "#5",
-        right: "#6",
+        left: "#11",
+        right: "#12",
       ),
       Binary(
         op: Add,
-        left: "#4",
-        right: "#7",
+        left: "#10",
+        right: "#13",
       ),
       Literal(Scalar(Float(1000000000.0))),
       Literal(Scalar(Float(0.0))),
@@ -131,68 +156,93 @@
       )),
       Unary(
         op: Normalize,
-        expr: "#11",
+        expr: "#17",
       ),
       Property(1),
       Unary(
         op: Normalize,
-        expr: "#13",
+        expr: "#19",
       ),
       Literal(Scalar(Float(0.08))),
       Binary(
         op: Dot,
-        left: "#12",
-        right: "#14",
+        left: "#18",
+        right: "#20",
       ),
       Binary(
         op: Sub,
-        left: "#15",
-        right: "#16",
+        left: "#21",
+        right: "#22",
       ),
       Unary(
         op: Saturate,
-        expr: "#17",
+        expr: "#23",
       ),
       Property(2),
       Unary(
         op: Normalize,
-        expr: "#19",
+        expr: "#25",
       ),
       Binary(
         op: Dot,
-        left: "#12",
-        right: "#20",
-      ),
-      Literal(Scalar(Float(1.0))),
-      Literal(Scalar(Float(0.941))),
-      Binary(
-        op: Sub,
-        left: "#21",
-        right: "#23",
-      ),
-      Unary(
-        op: Abs,
-        expr: "#24",
-      ),
-      Literal(Scalar(Float(28.0))),
-      Binary(
-        op: Mul,
-        left: "#25",
+        left: "#18",
         right: "#26",
       ),
+      Literal(Scalar(Float(0.955))),
       Binary(
         op: Sub,
-        left: "#22",
-        right: "#27",
+        left: "#27",
+        right: "#28",
+      ),
+      Literal(Scalar(Float(0.0))),
+      Binary(
+        op: Max,
+        left: "#29",
+        right: "#30",
+      ),
+      Literal(Scalar(Float(0.0))),
+      Binary(
+        op: Sub,
+        left: "#32",
+        right: "#29",
+      ),
+      Literal(Scalar(Float(0.0))),
+      Binary(
+        op: Max,
+        left: "#33",
+        right: "#34",
+      ),
+      Literal(Scalar(Float(1.0))),
+      Literal(Scalar(Float(55.0))),
+      Binary(
+        op: Mul,
+        left: "#31",
+        right: "#37",
+      ),
+      Binary(
+        op: Sub,
+        left: "#36",
+        right: "#38",
+      ),
+      Literal(Scalar(Float(14.0))),
+      Binary(
+        op: Mul,
+        left: "#35",
+        right: "#40",
+      ),
+      Binary(
+        op: Sub,
+        left: "#39",
+        right: "#41",
       ),
       Unary(
         op: Saturate,
-        expr: "#28",
+        expr: "#42",
       ),
       Binary(
         op: Mul,
-        left: "#18",
-        right: "#29",
+        left: "#24",
+        right: "#43",
       ),
       Attribute((
         attr: "f32_0",
@@ -200,29 +250,29 @@
       Property(3),
       Binary(
         op: Mul,
-        left: "#31",
-        right: "#32",
+        left: "#45",
+        right: "#46",
       ),
       Binary(
         op: Mul,
-        left: "#33",
-        right: "#30",
+        left: "#47",
+        right: "#44",
       ),
       Ternary(
         op: Vec3,
-        first: "#34",
-        second: "#34",
-        third: "#34",
+        first: "#48",
+        second: "#48",
+        third: "#48",
       ),
       Literal(Scalar(Float(1.0))),
       Binary(
         op: Vec4XyzW,
-        left: "#35",
-        right: "#36",
+        left: "#49",
+        right: "#50",
       ),
       Unary(
         op: Pack4x8unorm,
-        expr: "#37",
+        expr: "#51",
       ),
       Literal(Scalar(Uint(0))),
     ],
@@ -243,7 +293,7 @@
     texture_layout: (
       layout: [
         (
-          name: "mask",
+          name: "veil",
         ),
       ],
     ),

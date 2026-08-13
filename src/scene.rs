@@ -85,6 +85,9 @@ pub struct EnvironmentConfig {
     /// Fill light from the Earth disc onto the craft (lux). `0` = off.
     #[serde(default)]
     pub earthshine_illuminance: f32,
+    /// Dim fill on the camera-facing Earth hemisphere at night (lux). `0` = off.
+    #[serde(default)]
+    pub night_globe_illuminance: f32,
     /// `GlobalAmbientLight` brightness. Bevy default is 80; LEO wants 0.
     #[serde(default = "default_ambient_brightness")]
     pub ambient_brightness: f32,

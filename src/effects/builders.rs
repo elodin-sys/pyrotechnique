@@ -10,7 +10,7 @@
 //! - Exhaust axis is **local -Y**; the emitter entity is rotated so -Y points
 //!   along the scene's `direction`.
 //! - Texture slot names map to generated sprites: `mask` -> soft_circle.png,
-//!   `smoke` -> smoke_puff.png (see `effects::mod` for the binding logic).
+//!   `veil` -> glow_veil.png, `smoke` -> smoke_puff.png (see `effects::mod`).
 //! - Colors are HDR (components above 1.0) and rely on viewport bloom.
 
 use bevy::ecs::reflect::AppTypeRegistry;
@@ -89,6 +89,7 @@ pub fn generate(args: &GenEffectsArgs) -> anyhow::Result<()> {
         .join("textures");
     std::fs::create_dir_all(&tex_dir)?;
     write_soft_circle(&tex_dir.join("soft_circle.png"))?;
+    write_glow_veil(&tex_dir.join("glow_veil.png"))?;
     write_smoke_puff(&tex_dir.join("smoke_puff.png"))?;
     println!("wrote textures to {}", tex_dir.display());
     Ok(())
@@ -108,6 +109,22 @@ fn write_soft_circle(path: &std::path::Path) -> anyhow::Result<()> {
         let dy = (y as f32 - center) / center;
         let d = (dx * dx + dy * dy).sqrt().min(1.0);
         let falloff = (1.0 - d).powf(1.7);
+        *px = image::Luma([(falloff * 255.0) as u8]);
+    }
+    img.save(path)?;
+    Ok(())
+}
+
+/// Wide Gaussian with live corners — no hard disc edge, no hot core after overlap.
+fn write_glow_veil(path: &std::path::Path) -> anyhow::Result<()> {
+    const SIZE: u32 = 256;
+    let mut img = image::GrayImage::new(SIZE, SIZE);
+    let center = (SIZE as f32 - 1.0) * 0.5;
+    for (x, y, px) in img.enumerate_pixels_mut() {
+        let dx = (x as f32 - center) / center;
+        let dy = (y as f32 - center) / center;
+        let r2 = dx * dx + dy * dy;
+        let falloff = (-1.9 * r2).exp();
         *px = image::Luma([(falloff * 255.0) as u8]);
     }
     img.save(path)?;
@@ -1365,17 +1382,34 @@ fn earth_shell(writer: &ExprWriter, radius: f32) -> SetPositionSphereModifier {
     }
 }
 
+fn thicken_shell(writer: &ExprWriter, radius: f32, thickness: f32) -> SetAttributeModifier {
+    let n = writer.attr(Attribute::POSITION).normalized();
+    let r = writer
+        .lit(radius - thickness * 0.5)
+        .uniform(writer.lit(radius + thickness * 0.5));
+    SetAttributeModifier::new(Attribute::POSITION, (n * r).expr())
+}
+
 fn night_and_limb(
     writer: &ExprWriter,
     sun_dir: PropertyHandle,
     view_pos: PropertyHandle,
+    limb_mu: f32,
+    disc_sharp: f32,
+    space_sharp: f32,
 ) -> WriterExpr {
     let n = writer.attr(Attribute::POSITION).normalized();
     let sun = writer.prop(sun_dir).normalized();
     let night = (writer.lit(0.08) - n.clone().dot(sun)).saturate();
-    // Geometric limb: n·cam ≈ R/(R+h) ≈ 0.941.
+    // Peak at the geometric limb. Kill the Earth disc hard; fade softly into space.
     let mu = n.dot(writer.prop(view_pos).normalized());
-    let limb = (writer.lit(1.0) - (mu - writer.lit(0.941)).abs() * writer.lit(28.0)).saturate();
+    let d = mu - writer.lit(limb_mu);
+    let toward_disc = d.clone().max(writer.lit(0.0));
+    let toward_space = (writer.lit(0.0) - d).max(writer.lit(0.0));
+    let limb = (writer.lit(1.0)
+        - toward_disc * writer.lit(disc_sharp)
+        - toward_space * writer.lit(space_sharp))
+    .saturate();
     night * limb
 }
 
@@ -1545,9 +1579,11 @@ fn city_lights() -> EffectAsset {
     let _view_pos = writer.add_property("view_pos", Vec3::new(0.0, 6_778_140.0, 0.0).into());
     let intensity = writer.add_property("intensity", 0.0f32.into());
 
-    let init_pos = earth_shell(&writer, EARTH_R + 80_000.0);
+    let init_pos = earth_shell(&writer, EARTH_R + 8_000.0);
     let init_vel = init_zero_velocity(&writer);
-    let mag = writer.lit(0.35) + writer.lit(0.65) * writer.rand(ScalarType::Float);
+    // Geography is the Black Marble sample. Tiny mag jitter only — wide mag
+    // packed into 8-bit COLOR was the limb sparkle.
+    let mag = writer.lit(0.96) + writer.lit(0.04) * writer.rand(ScalarType::Float);
     let init_mag = SetAttributeModifier::new(Attribute::F32_0, mag.expr());
     let (init_age, init_lifetime) = init_age_lifetime(&writer, writer.lit(VACUUM_LIFETIME));
 
@@ -1557,18 +1593,14 @@ fn city_lights() -> EffectAsset {
     let scale = writer.attr(Attribute::F32_0) * writer.prop(intensity) * night;
     let update_color = SetAttributeModifier::new(Attribute::COLOR, packed_scale(&writer, scale));
 
-    let mut size = Gradient::new();
-    size.add_key(0.0, Vec3::splat(300.0));
-    size.add_key(1.0, Vec3::splat(300.0));
-
     let mut color = Gradient::new();
-    let hdr = Vec4::new(110.0, 72.0, 22.0, 1.0);
+    let hdr = Vec4::new(16.0, 10.0, 3.5, 0.75);
     color.add_key(0.0, hdr);
     color.add_key(1.0, hdr);
 
-    let mask_slot = writer.lit(0u32).expr();
+    let veil_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("veil");
     module.add_texture_slot("night");
 
     EffectAsset::new(
@@ -1588,38 +1620,57 @@ fn city_lights() -> EffectAsset {
     .update(update_color)
     .render(OrientModifier::new(OrientMode::FaceCameraPosition))
     .render(ParticleTextureModifier {
-        texture_slot: mask_slot,
+        texture_slot: veil_slot,
         sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
     })
     .render(crate::effects::sphere_map::SphereMapColorModifier {
         texture_slot: 1,
-        hdr_boost: 72.0,
+        hdr_boost: 12.0,
         luma_kill: 0.08,
-    })
-    .render(SizeOverLifetimeModifier {
-        gradient: size,
-        screen_space_size: false,
     })
     .render(ColorOverLifetimeModifier {
         gradient: color,
         blend: ColorBlendMode::Modulate,
         mask: ColorBlendMask::RGBA,
     })
+    // Constant pixels so lights don't alias as they cross the horizon.
+    .render(SetSizeModifier {
+        size: Vec3::splat(8.0).into(),
+    })
+    .render(ScreenSpaceSizeModifier)
 }
 
-fn airglow_shell(name: &str, altitude_m: f32, capacity: u32, size_m: f32, hdr: Vec4) -> EffectAsset {
+fn airglow_shell(
+    name: &str,
+    altitude_m: f32,
+    thickness_m: f32,
+    capacity: u32,
+    size_m: f32,
+    hdr: Vec4,
+    limb_mu: f32,
+    disc_sharp: f32,
+    space_sharp: f32,
+) -> EffectAsset {
     let writer = ExprWriter::new();
     let sun_dir = writer.add_property("sun_dir", Vec3::Y.into());
     let view_pos = writer.add_property("view_pos", Vec3::new(0.0, 6_778_140.0, 0.0).into());
     let intensity = writer.add_property("intensity", 0.0f32.into());
 
     let init_pos = earth_shell(&writer, EARTH_R + altitude_m);
+    let init_thick = thicken_shell(&writer, EARTH_R + altitude_m, thickness_m);
     let init_vel = init_zero_velocity(&writer);
-    let mag = writer.lit(0.55) + writer.lit(0.45) * writer.rand(ScalarType::Float);
+    let mag = writer.lit(0.96) + writer.lit(0.04) * writer.rand(ScalarType::Float);
     let init_mag = SetAttributeModifier::new(Attribute::F32_0, mag.expr());
     let (init_age, init_lifetime) = init_age_lifetime(&writer, writer.lit(VACUUM_LIFETIME));
 
-    let vis = night_and_limb(&writer, sun_dir, view_pos);
+    let vis = night_and_limb(
+        &writer,
+        sun_dir,
+        view_pos,
+        limb_mu,
+        disc_sharp,
+        space_sharp,
+    );
     let scale = writer.attr(Attribute::F32_0) * writer.prop(intensity) * vis;
     let update_color = SetAttributeModifier::new(Attribute::COLOR, packed_scale(&writer, scale));
 
@@ -1631,9 +1682,9 @@ fn airglow_shell(name: &str, altitude_m: f32, capacity: u32, size_m: f32, hdr: V
     color.add_key(0.0, hdr);
     color.add_key(1.0, hdr);
 
-    let mask_slot = writer.lit(0u32).expr();
+    let veil_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("veil");
 
     EffectAsset::new(
         capacity,
@@ -1645,6 +1696,7 @@ fn airglow_shell(name: &str, altitude_m: f32, capacity: u32, size_m: f32, hdr: V
     .with_simulation_condition(SimulationCondition::Always)
     .with_alpha_mode(bevy_hanabi::AlphaMode::Add)
     .init(init_pos)
+    .init(init_thick)
     .init(init_vel)
     .init(init_mag)
     .init(init_age)
@@ -1652,7 +1704,7 @@ fn airglow_shell(name: &str, altitude_m: f32, capacity: u32, size_m: f32, hdr: V
     .update(update_color)
     .render(OrientModifier::new(OrientMode::FaceCameraPosition))
     .render(ParticleTextureModifier {
-        texture_slot: mask_slot,
+        texture_slot: veil_slot,
         sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
     })
     .render(SizeOverLifetimeModifier {
@@ -1670,19 +1722,27 @@ fn airglow_green() -> EffectAsset {
     airglow_shell(
         "airglow_green",
         95_000.0,
-        280_000,
-        16_000.0,
-        Vec4::new(3.5, 26.0, 7.0, 0.85),
+        10_000.0,
+        520_000,
+        32_000.0,
+        Vec4::new(0.12, 2.8, 0.65, 0.042),
+        0.955,
+        55.0,
+        14.0,
     )
 }
 
 fn airglow_red() -> EffectAsset {
     airglow_shell(
         "airglow_red",
-        250_000.0,
-        180_000,
-        36_000.0,
-        Vec4::new(22.0, 6.0, 2.2, 0.55),
+        150_000.0,
+        12_000.0,
+        340_000,
+        40_000.0,
+        Vec4::new(0.32, 0.09, 0.03, 0.01),
+        0.963,
+        50.0,
+        10.0,
     )
 }
 

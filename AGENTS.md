@@ -71,7 +71,8 @@ honored identically by pyrotechnique and Elodin:
   sun and camera position in the effect's local (EarthRoot) frame. City lights
   and airglow fade the day hemisphere and tighten the limb band. Defaults are
   noon-safe (`sun_dir = +Y`, `intensity = 0`) so a missed property write does
-  not paint a green limb on the day stills.
+  not paint a green limb on the day stills. Cities/stars use the dusk visibility
+  curve; airglow uses a later nightglow curve so twilight Rayleigh stays orange.
 - **`spawn_origin` + `spawn_axis` (vec3, the anchored-trail contract):** the
   effect stays `SimulationSpace::Local` but runs on a **world-fixed anchor**
   (here: the world origin; Elodin: a grid-cell entity frozen at ignition).
@@ -124,8 +125,8 @@ sim orbit: t=0 noon, 22.5 dusk, 45 midnight, 67.5 dawn. No cubemap.
 | Effect | Attach | Role |
 |---|---|---|
 | `stars_dim` / `stars_bright` / `milky_way` | sky | Pinpricks on a 15e6 m sphere. Hanabi 0.20 ignores `screen_space_size`; sizes are world metres via `star_world_size` in builders. |
-| `city_lights` | earth | Shell at `R+80 km` (depth-test vs the globe). Fragment `SphereMapColorModifier` samples `textures/earth_night.png`. Init/update **cannot** bind material images. |
-| `airglow_green` / `airglow_red` | earth | Shells at 95 km / 250 km. Limb term uses `view_pos`; night via `sun_dir` × `intensity`. |
+| `city_lights` | earth | Shell at `R+8 km` (in front of the globe for reverse-Z). Fragment `SphereMapColorModifier` samples `textures/earth_night.png`. Init/update **cannot** bind material images. |
+| `airglow_green` / `airglow_red` | earth | Shells at 95 km / 150 km. Limb term uses `view_pos`; night via `sun_dir`. `intensity` ramps **after** the terminator (stars/cities use the dusk curve). |
 
 HDR ballpark: dim stars ~10–20×, bright ~40–60×, city cores ~8–25× after the map, airglow ~3–8× at low alpha. Day EV100 ~13.5, night ~8–10.
 

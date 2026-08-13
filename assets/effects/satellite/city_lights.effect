@@ -70,25 +70,8 @@
     {
       "pyrotechnique::effects::sphere_map::SphereMapColorModifier": (
         texture_slot: 1,
-        hdr_boost: 72.0,
+        hdr_boost: 12.0,
         luma_kill: 0.08,
-      ),
-    },
-    {
-      "bevy_hanabi::modifier::output::SizeOverLifetimeModifier": (
-        gradient: (
-          keys: [
-            (
-              ratio: 0.0,
-              value: (300.0, 300.0, 300.0),
-            ),
-            (
-              ratio: 1.0,
-              value: (300.0, 300.0, 300.0),
-            ),
-          ],
-        ),
-        screen_space_size: false,
       ),
     },
     {
@@ -97,11 +80,11 @@
           keys: [
             (
               ratio: 0.0,
-              value: (110.0, 72.0, 22.0, 1.0),
+              value: (16.0, 10.0, 3.5, 0.75),
             ),
             (
               ratio: 1.0,
-              value: (110.0, 72.0, 22.0, 1.0),
+              value: (16.0, 10.0, 3.5, 0.75),
             ),
           ],
         ),
@@ -109,15 +92,23 @@
         mask: (15),
       ),
     },
+    {
+      "bevy_hanabi::modifier::output::SetSizeModifier": (
+        size: Single((8.0, 8.0, 8.0)),
+      ),
+    },
+    {
+      "bevy_hanabi::modifier::output::ScreenSpaceSizeModifier": (),
+    },
   ],
   motion_integration: PostUpdate,
   module: (
     expressions: [
       Literal(Vector(Vec3((0.0, 0.0, 0.0)))),
-      Literal(Scalar(Float(6458140.0))),
+      Literal(Scalar(Float(6386140.0))),
       Literal(Vector(Vec3((0.0, 0.0, 0.0)))),
-      Literal(Scalar(Float(0.35))),
-      Literal(Scalar(Float(0.65))),
+      Literal(Scalar(Float(0.96))),
+      Literal(Scalar(Float(0.04))),
       BuiltIn((
         operator: Rand(Scalar(Float)),
       )),
@@ -209,7 +200,7 @@
     texture_layout: (
       layout: [
         (
-          name: "mask",
+          name: "veil",
         ),
         (
           name: "night",

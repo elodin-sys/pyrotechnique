@@ -182,8 +182,8 @@ Scene flags for non-Earth, non-rocket, and LEO scenes:
 | apollo-lander | `rcs_puff` | Local | Add | Sharp white-blue attitude jets, pulsed via emitter `activity` |
 | apollo-lander | `ground_dust` | Global | Blend | Ballistic regolith streaks: flat radial sheet, lunar gravity, no drag |
 | satellite | `stars_dim` / `stars_bright` / `milky_way` | Local | Add | Once-burst star field on a 15,000 km sphere; `intensity` from orbit phase (0 at noon) |
-| satellite | `city_lights` | Local | Add | Black Marble on an Earth shell; `sun_dir` + `intensity` kill the day side |
-| satellite | `airglow_green` / `airglow_red` | Local | Add | Night limb shells at ~95 km and ~250 km |
+| satellite | `city_lights` | Local | Add | Black Marble on an `R+8 km` Earth shell; `sun_dir` + `intensity` kill the day side |
+| satellite | `airglow_green` / `airglow_red` | Local | Add | Night limb shells at ~95 km and ~150 km; intensity after terminator |
 
 Techniques worth knowing (see `src/effects/builders.rs`):
 

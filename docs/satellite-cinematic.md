@@ -64,9 +64,9 @@ applies it. Stars sized in “pixels” at 15,000 km are invisible. Use world me
 | `stars_dim` | sky | ~800k | Uniform sphere, radius 1.5e7 m. Power-law magnitude. |
 | `stars_bright` | sky | ~40k | Same sphere, larger/hotter, some color temp. Bloom bait. |
 | `milky_way` | sky | ~400k | Same sphere, keep a band near a galactic plane. Warmer, dusty. |
-| `city_lights` | earth | ~1.5M | Shell at `R+80 km` (must sit in front of the globe for reverse-Z). Sample Black Marble; dark texels get alpha 0. |
-| `airglow_green` | earth | ~280k | Shell at `R+95 km`. Tight limb × night. |
-| `airglow_red` | earth | ~180k | Shell at `R+250 km`, fainter red/orange above the green. |
+| `city_lights` | earth | ~1.5M | Shell at `R+8 km` (in front of the globe for reverse-Z). Sample Black Marble; dark texels get alpha 0. |
+| `airglow_green` | earth | ~520k | Shell at `R+95 km`. Tight limb × night. Intensity ramps after the terminator. |
+| `airglow_red` | earth | ~340k | Shell at `R+150 km`, a faint red/orange whisper above the green. |
 
 **Once-burst rule:** do not scale `count` or deactivate `is_once()` spawners.
 Dim via the `intensity` / `sun_dir` **property**. Authored defaults are
@@ -115,8 +115,9 @@ Star pinpricks ~10–20×, bright stars ~40–60×, city cores ~8–25× after t
 airglow ~3–8× at low alpha. Day EV100 ~13.5, night ~8–10, interpolate with sun
 elevation in the editor (`night_exposure_ev100`).
 
-Earthshine is a dim blue-white directional on render layer 1 (craft only) so it
-does not wash out the night globe. Full at night, zero at noon.
+Earthshine is a warm directional on render layer 1 (craft only). A second,
+dimmer layer-0 fill lights the camera-facing night globe so continents stay
+just readable. Both fade to zero at noon. Do not raise `GlobalAmbientLight`.
 
 ## What “awesome” means
 

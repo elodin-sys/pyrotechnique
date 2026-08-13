@@ -30,7 +30,8 @@ SceneConfig(
         orbit_period_s: 90.0,
         earth_spin_deg_per_orbit: 20.0,
         night_exposure_ev100: Some(9.0),
-        earthshine_illuminance: 700.0,
+        earthshine_illuminance: 2500.0,
+        night_globe_illuminance: 180.0,
         ambient_brightness: 0.0,
     ),
     emitters: [
