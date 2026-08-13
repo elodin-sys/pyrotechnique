@@ -4,10 +4,11 @@ use bevy::camera::visibility::{NoFrustumCulling, RenderLayers};
 use bevy::camera::{ClearColorConfig, Exposure, Hdr};
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::atmosphere::ScatteringMedium;
-use bevy::light::{Atmosphere, GlobalAmbientLight, SunDisk};
+use bevy::light::{Atmosphere, GlobalAmbientLight, Skybox, SunDisk};
 use bevy::pbr::{AtmosphereMode, AtmosphereSettings};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
+use bevy::render::render_resource::{TextureViewDescriptor, TextureViewDimension};
 use bevy::transform::TransformSystems;
 use bevy_panorbit_camera::PanOrbitCamera;
 
@@ -38,6 +39,10 @@ pub struct Earthshine;
 #[derive(Component)]
 pub struct NightGlobeFill;
 
+/// Globe mesh whose emissive map is scaled by orbit night visibility.
+#[derive(Component)]
+pub struct EarthGlobeMaterial;
+
 /// Atmosphere whose [`GlobalTransform`] is the planet center (Earth).
 #[derive(Component)]
 pub struct OrbitalAtmosphere;
@@ -62,6 +67,8 @@ impl Plugin for EnvironmentPlugin {
                     ensure_environment,
                     hide_earth_placeholder,
                     uncull_earth_meshes,
+                    tag_earth_globe_material,
+                    configure_skybox_cubemap,
                     mark_earth_ready,
                 ),
             )
@@ -146,7 +153,13 @@ fn ensure_environment(
     mut ambient: ResMut<GlobalAmbientLight>,
     existing: Query<(), With<EnvironmentEntity>>,
     mut camera: Query<
-        (&mut Camera, &mut Exposure, &mut Bloom, &mut AtmosphereSettings),
+        (
+            Entity,
+            &mut Camera,
+            &mut Exposure,
+            &mut Bloom,
+            &mut AtmosphereSettings,
+        ),
         With<MainCamera>,
     >,
 ) {
@@ -305,7 +318,7 @@ fn ensure_environment(
     ambient.brightness = env.ambient_brightness;
     ambient.color = Color::WHITE;
 
-    if let Ok((mut cam, mut exposure, mut bloom, mut atmo)) = camera.single_mut() {
+    if let Ok((cam_entity, mut cam, mut exposure, mut bloom, mut atmo)) = camera.single_mut() {
         exposure.ev100 = env.exposure_ev100;
         bloom.intensity = env.bloom_intensity;
         *atmo = atmosphere_settings(env);
@@ -314,6 +327,15 @@ fn ensure_environment(
         } else {
             ClearColorConfig::Custom(Color::BLACK)
         };
+        if let Some(path) = &env.skybox {
+            commands.entity(cam_entity).insert(Skybox {
+                image: Some(asset_server.load(path.clone())),
+                brightness: 0.0,
+                rotation: Quat::IDENTITY,
+            });
+        } else {
+            commands.entity(cam_entity).remove::<Skybox>();
+        }
     }
 }
 
@@ -376,22 +398,149 @@ fn uncull_earth_meshes(
     }
 }
 
+fn tag_earth_globe_material(
+    earth: Query<Entity, With<EarthRoot>>,
+    children: Query<&Children>,
+    names: Query<&Name>,
+    mesh_materials: Query<
+        &MeshMaterial3d<StandardMaterial>,
+        Without<EarthGlobeMaterial>,
+    >,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
+) {
+    let Ok(root) = earth.single() else {
+        return;
+    };
+    for descendant in children.iter_descendants(root) {
+        let Ok(handle) = mesh_materials.get(descendant) else {
+            continue;
+        };
+        let name = names
+            .get(descendant)
+            .map(|n| n.as_str())
+            .unwrap_or("");
+        if name.contains("Cloud") {
+            continue;
+        }
+        if let Some(mut material) = materials.get_mut(&handle.0) {
+            material.emissive = LinearRgba::BLACK;
+        }
+        commands.entity(descendant).insert(EarthGlobeMaterial);
+    }
+}
+
+fn configure_skybox_cubemap(
+    skyboxes: Query<&Skybox, With<MainCamera>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    for skybox in &skyboxes {
+        let Some(handle) = &skybox.image else {
+            continue;
+        };
+        configure_cubemap_image(handle, &mut images);
+    }
+}
+
+fn configure_cubemap_image(handle: &Handle<Image>, images: &mut Assets<Image>) -> bool {
+    let Some(image) = images.get(handle) else {
+        return false;
+    };
+    if image
+        .texture_view_descriptor
+        .as_ref()
+        .is_some_and(|descriptor| descriptor.dimension == Some(TextureViewDimension::Cube))
+    {
+        return true;
+    }
+    if image.width() == 0 {
+        return false;
+    }
+
+    let array_layers = image.texture_descriptor.array_layer_count();
+    if array_layers == 6 {
+        let Some(mut image) = images.get_mut(handle) else {
+            return false;
+        };
+        image.texture_view_descriptor = Some(TextureViewDescriptor {
+            dimension: Some(TextureViewDimension::Cube),
+            ..default()
+        });
+        return true;
+    }
+
+    if array_layers == 1 {
+        let layers = image.height() / image.width();
+        if layers == 6 {
+            let Some(mut image) = images.get_mut(handle) else {
+                return false;
+            };
+            let _ = image.reinterpret_stacked_2d_as_array(layers);
+            image.texture_view_descriptor = Some(TextureViewDescriptor {
+                dimension: Some(TextureViewDimension::Cube),
+                ..default()
+            });
+            return true;
+        }
+    }
+
+    false
+}
+
+fn material_images_ready(material: &StandardMaterial, asset_server: &AssetServer) -> bool {
+    [
+        material.base_color_texture.as_ref(),
+        material.emissive_texture.as_ref(),
+        material.normal_map_texture.as_ref(),
+        material.metallic_roughness_texture.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    .all(|handle| asset_server.is_loaded_with_dependencies(handle.id()))
+}
+
 fn mark_earth_ready(
     scene: Res<SceneConfig>,
     earth: Query<Entity, With<EarthRoot>>,
     children: Query<&Children>,
     meshes: Query<(), With<Mesh3d>>,
+    mesh_materials: Query<&MeshMaterial3d<StandardMaterial>>,
+    materials: Res<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+    skyboxes: Query<&Skybox, With<MainCamera>>,
+    mut images: ResMut<Assets<Image>>,
     mut ready: ResMut<EarthReady>,
 ) {
-    if scene.environment.earth.is_none() {
-        ready.0 = true;
-        return;
-    }
-    let Ok(root) = earth.single() else {
-        ready.0 = false;
-        return;
+    let earth_ok = if scene.environment.earth.is_none() {
+        true
+    } else {
+        match earth.single() {
+            Ok(root) => {
+                let descendants: Vec<_> = children.iter_descendants(root).collect();
+                let has_mesh = descendants.iter().any(|entity| meshes.contains(*entity));
+                let textures_ok = descendants.iter().all(|entity| {
+                    let Ok(handle) = mesh_materials.get(*entity) else {
+                        return true;
+                    };
+                    materials
+                        .get(&handle.0)
+                        .is_some_and(|material| material_images_ready(material, &asset_server))
+                });
+                has_mesh && textures_ok
+            }
+            Err(_) => false,
+        }
     };
-    ready.0 = children
-        .iter_descendants(root)
-        .any(|entity| meshes.contains(entity));
+
+    let skybox_ok = match scene.environment.skybox.as_ref() {
+        None => true,
+        Some(_) => skyboxes.iter().any(|skybox| {
+            skybox
+                .image
+                .as_ref()
+                .is_some_and(|handle| configure_cubemap_image(handle, &mut images))
+        }),
+    };
+
+    ready.0 = earth_ok && skybox_ok;
 }

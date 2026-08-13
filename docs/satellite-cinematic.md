@@ -1,9 +1,11 @@
 # LEO satellite cinematic (Hanabi sky)
 
 Pyrotechnique project `satellite`: OreSat in LEO against true-scale Earth.
-Stars, Milky Way dust, city lights, and airglow are **all Hanabi**. No cubemap.
-Reference stills live in `targets/satellite/`. The vehicle is Elodin’s
-`oresat-low.glb`; Earth is `earth.glb`.
+Stars, Milky Way dust, city lights, and airglow are **Hanabi**. A cubemap
+skybox (`milky_way.cubemap.ktx2`) sits under the particles and fades with
+`star_visibility` so noon stays empty. Reference stills live in
+`targets/satellite/`. The vehicle is Elodin’s `oresat-low.glb`; Earth is
+`earth_v5.glb` (8K August + Less_Clouds). See `docs/high-res-earth.md`.
 
 The stills are ISS photography. We are not rebuilding the ISS. The job is the
 lighting those photos have: hard sun, a curved Earth filling the frame, a thin
@@ -64,7 +66,7 @@ applies it. Stars sized in “pixels” at 15,000 km are invisible. Use world me
 | `stars_dim` | sky | ~800k | Uniform sphere, radius 1.5e7 m. Power-law magnitude. |
 | `stars_bright` | sky | ~40k | Same sphere, larger/hotter, some color temp. Bloom bait. |
 | `milky_way` | sky | ~400k | Same sphere, keep a band near a galactic plane. Warmer, dusty. |
-| `city_lights` | earth | ~1.5M | Shell at `R+8 km` (in front of the globe for reverse-Z). Sample Black Marble; dark texels get alpha 0. |
+| `city_lights` | earth | ~1.5M | Shell at `R+8 km` (in front of the globe for reverse-Z). Sample `textures/earth/night.jpg`; dark texels get alpha 0. |
 | `airglow_green` | earth | ~520k | Shell at `R+95 km`. Tight limb × night. Intensity ramps after the terminator. |
 | `airglow_red` | earth | ~340k | Shell at `R+150 km`, a faint red/orange whisper above the green. |
 
@@ -73,17 +75,18 @@ Dim via the `intensity` / `sun_dir` **property**. Authored defaults are
 noon-safe (`intensity = 0`, `sun_dir = +Y`) so a missed write does not paint
 airglow on the day stills. `orbit.rs` owns sky/earth intensity after spawn.
 
-**City geography:** NASA Black Marble (public domain) as
-`assets/textures/earth_night.png`. Hanabi’s `TextureSampleExpr` is compute-init;
-material images are fragment-only. `SphereMapColorModifier` samples
-`textureSampleLevel` (no derivatives) and multiplies RGB × boost, with
-`alpha *= step(luma_kill, luma)`. Do not fake cities with noise.
+**City geography:** NoneCG night lights as `assets/textures/earth/night.jpg`
+(same pixels as the globe emissive). Hanabi’s `TextureSampleExpr` is
+compute-init; material images are fragment-only. `SphereMapColorModifier`
+samples `textureSampleLevel` (no derivatives) and multiplies RGB × boost, with
+`alpha *= step(luma_kill, luma)`. Do not fake cities with noise. The mesh
+emissive is a dim base (`star_visibility × 1.6`); particles own the bloom.
 
-Capture waits for `EffectMaterial` images, not just `.effect` assets. Empty
-`materials.iter().all()` is vacuously true — join emitter + optional material.
+Capture waits for `EffectMaterial` images, Earth material textures, and the
+skybox cube view — not just `.effect` assets or a spawned mesh.
 
 `gen-effects` regenerates `soft_circle.png` / `smoke_puff.png` but **not**
-`earth_night.png`.
+the earth / skybox files.
 
 ## Scenarios
 

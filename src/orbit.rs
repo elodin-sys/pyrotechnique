@@ -2,7 +2,7 @@
 //! intensity / city `sun_dir` / exposure from sim time.
 
 use bevy::camera::Exposure;
-use bevy::light::DirectionalLight;
+use bevy::light::{DirectionalLight, Skybox};
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use bevy_hanabi::EffectProperties;
@@ -10,8 +10,15 @@ use std::f32::consts::TAU;
 
 use crate::app::SimClock;
 use crate::effects::{Emitter, INTENSITY_PROPERTY, SUN_DIR_PROPERTY, VIEW_POS_PROPERTY};
-use crate::render::{EarthRoot, Earthshine, MainCamera, NightGlobeFill, SceneSun, SkyRoot};
+use crate::render::{
+    EarthGlobeMaterial, EarthRoot, Earthshine, MainCamera, NightGlobeFill, SceneSun, SkyRoot,
+};
 use crate::scene::SceneConfig;
+
+/// Night-peak skybox brightness (cd/m²). Zero at noon via `star_visibility`.
+const SKYBOX_NIGHT_BRIGHTNESS: f32 = 1000.0;
+/// Dim globe city-light emissive so Hanabi still owns the bloom cores.
+const EARTH_EMISSIVE_NIGHT: f32 = 1.6;
 
 pub struct OrbitPlugin;
 
@@ -79,6 +86,10 @@ fn apply_orbit_properties(
     mut earthshine: Query<&mut DirectionalLight, (With<Earthshine>, Without<NightGlobeFill>)>,
     mut globe_fill: Query<&mut DirectionalLight, (With<NightGlobeFill>, Without<Earthshine>)>,
     mut camera: Query<&mut Exposure, With<MainCamera>>,
+    mut skybox: Query<&mut Skybox, With<MainCamera>>,
+    sky_root: Query<&Transform, (With<SkyRoot>, Without<EarthRoot>)>,
+    globe_mats: Query<&MeshMaterial3d<StandardMaterial>, With<EarthGlobeMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     emitters: Query<(Entity, &Emitter, Option<&mut EffectProperties>)>,
     capturing: Option<Res<crate::capture::CaptureConfig>>,
 ) {
@@ -114,6 +125,24 @@ fn apply_orbit_properties(
     }
     if let Ok(mut light) = globe_fill.single_mut() {
         light.illuminance = env.night_globe_illuminance * night_fill;
+    }
+
+    if let Ok(mut skybox) = skybox.single_mut() {
+        skybox.brightness = SKYBOX_NIGHT_BRIGHTNESS * star_vis;
+        if let Ok(sky) = sky_root.single() {
+            skybox.rotation = sky.rotation;
+        }
+    }
+
+    let emissive = LinearRgba::rgb(
+        EARTH_EMISSIVE_NIGHT * star_vis,
+        EARTH_EMISSIVE_NIGHT * star_vis,
+        EARTH_EMISSIVE_NIGHT * star_vis,
+    );
+    for handle in &globe_mats {
+        if let Some(mut material) = materials.get_mut(&handle.0) {
+            material.emissive = emissive;
+        }
     }
 
     let view_pos = match (camera_gt.single(), earth_gt.single()) {

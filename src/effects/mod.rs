@@ -235,7 +235,7 @@ pub fn emitter_transform(config: &EmitterConfig) -> Transform {
 fn slot_image(name: &str, asset_server: &AssetServer) -> Handle<Image> {
     match name {
         "smoke" => asset_server.load("textures/smoke_puff.png"),
-        "night" => asset_server.load("textures/earth_night.png"),
+        "night" => asset_server.load("textures/earth/night.jpg"),
         "veil" => asset_server.load("textures/glow_veil.png"),
         // "mask" and anything unknown get the soft round falloff.
         _ => asset_server.load("textures/soft_circle.png"),

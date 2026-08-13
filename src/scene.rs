@@ -91,6 +91,9 @@ pub struct EnvironmentConfig {
     /// `GlobalAmbientLight` brightness. Bevy default is 80; LEO wants 0.
     #[serde(default = "default_ambient_brightness")]
     pub ambient_brightness: f32,
+    /// Optional cubemap skybox (`*.cubemap.ktx2`). Brightness follows star visibility.
+    #[serde(default)]
+    pub skybox: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

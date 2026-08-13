@@ -16,7 +16,7 @@ SceneConfig(
         camera_near: 0.08,
         camera_far: 20000000.0,
         earth: Some(EarthConfig(
-            path: "models/earth.glb",
+            path: "models/earth_v5.glb",
             altitude_m: 400000.0,
             radius_m: 6378140.0,
             rotation_deg: (30.0, 31.0, 0.0),

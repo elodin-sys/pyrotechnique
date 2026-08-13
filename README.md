@@ -14,9 +14,10 @@ Work is organized into **projects**. Four ship built in:
   vacuum descent plume, pulsed RCS quads, and a ballistic regolith dust sheet,
   tuned against film and simulation references.
 - **rocket** — 2 m model rocket, 6 s boost, motor core/flame plus launch smoke.
-- **satellite** — OreSat in LEO against true-scale Earth. Stars, Milky Way,
-  city lights, and airglow are Hanabi particles (no cubemap); a 90 s sim
-  orbit is one compressed day/night cycle.
+- **satellite** — OreSat in LEO against true-scale Earth (`earth_v5.glb`).
+  Stars, Milky Way, city lights, and airglow are Hanabi particles over an
+  Elodin-format cubemap that fades at noon; a 90 s sim orbit is one
+  compressed day/night cycle.
 
 ![ascent](shot-ascent.png)
 ![max-q](shot-max-q.png)
@@ -259,13 +260,14 @@ src/
 ├── ui.rs          egui editor panels, project picker, auto-save
 └── effects/
     ├── mod.rs         emitter spawning, intensity, hot reload, gizmos
-    ├── sphere_map.rs  fragment equirect sample (city lights / Black Marble)
+    ├── sphere_map.rs  fragment equirect sample (city lights)
     └── builders.rs    Rust builders for the built-in effects + sprites
 assets/
 ├── effects/<project>/   *.effect (Hanabi RON) — the tunable artifacts
 ├── scenes/              <project>.scene.ron (+ debug variants)
-├── textures/            generated sprites (soft_circle, smoke_puff) + earth_night.png
-└── models/              vehicle GLBs (shared)
+├── textures/            sprites + textures/earth/ (8K night for Hanabi)
+├── skyboxes/            milky_way.cubemap.ktx2
+└── models/              vehicle GLBs + earth_v5.glb
 targets/<project>/       reference images
 shots/<project>/         capture output (gitignored)
 ```
