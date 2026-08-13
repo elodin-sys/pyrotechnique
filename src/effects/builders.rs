@@ -15,6 +15,7 @@
 
 use bevy::ecs::reflect::AppTypeRegistry;
 use bevy::math::{Vec3, Vec4};
+use bevy_hanabi::graph::expr::PropertyHandle;
 use bevy_hanabi::prelude::*;
 use bevy_hanabi::register_modifiers;
 
@@ -342,6 +343,29 @@ fn merlin_flame() -> EffectAsset {
             blend: ColorBlendMode::Modulate,
             mask: ColorBlendMask::RGBA,
         })
+}
+
+/// Map cone-local POSITION (+Y axis) onto `spawn_axis`, then translate by
+/// `spawn_origin`. `SetPositionCone3dModifier` is always Y-aligned; without
+/// this, a long birth volume stays world-up while the vehicle tips.
+fn init_cone_on_spawn_axis(
+    writer: &ExprWriter,
+    spawn_origin: PropertyHandle,
+    spawn_axis: PropertyHandle,
+) -> SetAttributeModifier {
+    let p = writer.attr(Attribute::POSITION);
+    let axis = writer.prop(spawn_axis);
+    // cross(axis, Y) vanishes near ±Y — switch the helper to X.
+    let use_x = axis.clone().y().abs().step(writer.lit(0.9));
+    let helper = writer.lit(Vec3::Y).mix(writer.lit(Vec3::X), use_x);
+    let binormal = axis.clone().cross(helper).normalized();
+    let tangent = binormal.clone().cross(axis.clone()).normalized();
+    let oriented =
+        binormal * p.clone().x() + axis * p.clone().y() + tangent * p.z();
+    SetAttributeModifier::new(
+        Attribute::POSITION,
+        (oriented + writer.prop(spawn_origin)).expr(),
+    )
 }
 
 /// Persistent world-space smoke column, floating-origin-safe edition.
@@ -1012,20 +1036,19 @@ fn boost_trail() -> EffectAsset {
     let spawn_origin = writer.add_property("spawn_origin", Vec3::ZERO.into());
     let spawn_axis = writer.add_property("spawn_axis", Vec3::NEG_Y.into());
 
-    // Birth volume stretched ~5 m along the exhaust axis: per-frame spawn
+    // Birth volume stretched ~5 m along spawn_axis (exhaust): per-frame spawn
     // batches land at one nozzle pose, so the axial spread must cover the
     // vehicle's inter-frame motion (250+ m/s at 60 fps ~= 4.2 m) or the trail
     // beads up. Narrow near the vehicle (top), wider downstream (base).
+    // Cone modifier is Y-fixed — reorient onto spawn_axis so tip-over does not
+    // leave a world-up sausage beside the flame.
     let init_pos = SetPositionCone3dModifier {
         height: writer.lit(5.0).expr(),
         base_radius: writer.lit(0.35).expr(),
         top_radius: writer.lit(0.12).expr(),
         dimension: ShapeDimension::Volume,
     };
-    let offset_pos = SetAttributeModifier::new(
-        Attribute::POSITION,
-        (writer.attr(Attribute::POSITION) + writer.prop(spawn_origin)).expr(),
-    );
+    let offset_pos = init_cone_on_spawn_axis(&writer, spawn_origin, spawn_axis);
 
     // Diverge from a virtual center just up-plume of the nozzle so the trail
     // widens downstream.

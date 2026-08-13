@@ -25,43 +25,43 @@
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "position",
-        value: "#6",
+        value: "#26",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "velocity",
-        value: "#18",
+        value: "#38",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "age",
-        value: "#19",
+        value: "#39",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "lifetime",
-        value: "#22",
+        value: "#42",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "color",
-        value: "#35",
+        value: "#55",
       ),
     },
   ],
   update_modifiers: [
     {
       "bevy_hanabi::modifier::force::LinearDragModifier": (
-        drag: "#36",
+        drag: "#56",
       ),
     },
     {
       "bevy_hanabi::modifier::accel::AccelModifier": (
-        accel: "#37",
+        accel: "#57",
       ),
     },
   ],
@@ -74,7 +74,7 @@
     },
     {
       "bevy_hanabi::modifier::output::ParticleTextureModifier": (
-        texture_slot: "#38",
+        texture_slot: "#58",
         sample_mapping: Modulate,
       ),
     },
@@ -143,56 +143,134 @@
       Attribute((
         attr: "position",
       )),
+      Property(2),
+      Unary(
+        op: Y,
+        expr: "#5",
+      ),
+      Unary(
+        op: Abs,
+        expr: "#6",
+      ),
+      Literal(Scalar(Float(0.9))),
+      Binary(
+        op: Step,
+        left: "#8",
+        right: "#7",
+      ),
+      Literal(Vector(Vec3((0.0, 1.0, 0.0)))),
+      Literal(Vector(Vec3((1.0, 0.0, 0.0)))),
+      Ternary(
+        op: Mix,
+        first: "#10",
+        second: "#11",
+        third: "#9",
+      ),
+      Binary(
+        op: Cross,
+        left: "#5",
+        right: "#12",
+      ),
+      Unary(
+        op: Normalize,
+        expr: "#13",
+      ),
+      Binary(
+        op: Cross,
+        left: "#14",
+        right: "#5",
+      ),
+      Unary(
+        op: Normalize,
+        expr: "#15",
+      ),
+      Unary(
+        op: X,
+        expr: "#4",
+      ),
+      Binary(
+        op: Mul,
+        left: "#14",
+        right: "#17",
+      ),
+      Unary(
+        op: Y,
+        expr: "#4",
+      ),
+      Binary(
+        op: Mul,
+        left: "#5",
+        right: "#19",
+      ),
+      Binary(
+        op: Add,
+        left: "#18",
+        right: "#20",
+      ),
+      Unary(
+        op: Z,
+        expr: "#4",
+      ),
+      Binary(
+        op: Mul,
+        left: "#16",
+        right: "#22",
+      ),
+      Binary(
+        op: Add,
+        left: "#21",
+        right: "#23",
+      ),
       Property(1),
       Binary(
         op: Add,
-        left: "#4",
-        right: "#5",
+        left: "#24",
+        right: "#25",
       ),
       Property(1),
       Property(2),
       Literal(Scalar(Float(0.6))),
       Binary(
         op: Mul,
-        left: "#8",
-        right: "#9",
+        left: "#28",
+        right: "#29",
       ),
       Binary(
         op: Sub,
-        left: "#7",
-        right: "#10",
+        left: "#27",
+        right: "#30",
       ),
       Literal(Scalar(Float(8.0))),
       Literal(Scalar(Float(16.0))),
       Binary(
         op: UniformRand,
-        left: "#12",
-        right: "#13",
+        left: "#32",
+        right: "#33",
       ),
       Attribute((
         attr: "position",
       )),
       Binary(
         op: Sub,
-        left: "#15",
-        right: "#11",
+        left: "#35",
+        right: "#31",
       ),
       Unary(
         op: Normalize,
-        expr: "#16",
+        expr: "#36",
       ),
       Binary(
         op: Mul,
-        left: "#17",
-        right: "#14",
+        left: "#37",
+        right: "#34",
       ),
       Literal(Scalar(Float(0.0))),
       Literal(Scalar(Float(18.0))),
       Literal(Scalar(Float(70.0))),
       Binary(
         op: UniformRand,
-        left: "#20",
-        right: "#21",
+        left: "#40",
+        right: "#41",
       ),
       BuiltIn((
         operator: Rand(Scalar(Float)),
@@ -200,14 +278,14 @@
       Literal(Scalar(Float(0.3))),
       Binary(
         op: Mul,
-        left: "#23",
-        right: "#24",
+        left: "#43",
+        right: "#44",
       ),
       Literal(Scalar(Float(0.7))),
       Binary(
         op: Add,
-        left: "#25",
-        right: "#26",
+        left: "#45",
+        right: "#46",
       ),
       BuiltIn((
         operator: Rand(Scalar(Float)),
@@ -215,29 +293,29 @@
       Literal(Scalar(Float(0.7))),
       Binary(
         op: Mul,
-        left: "#28",
-        right: "#29",
+        left: "#48",
+        right: "#49",
       ),
       Literal(Scalar(Float(0.3))),
       Binary(
         op: Add,
-        left: "#30",
-        right: "#31",
+        left: "#50",
+        right: "#51",
       ),
       Ternary(
         op: Vec3,
-        first: "#27",
-        second: "#27",
-        third: "#27",
+        first: "#47",
+        second: "#47",
+        third: "#47",
       ),
       Binary(
         op: Vec4XyzW,
-        left: "#33",
-        right: "#32",
+        left: "#53",
+        right: "#52",
       ),
       Unary(
         op: Pack4x8unorm,
-        expr: "#34",
+        expr: "#54",
       ),
       Literal(Scalar(Float(1.1))),
       Literal(Vector(Vec3((0.3, 0.25, 0.12)))),
