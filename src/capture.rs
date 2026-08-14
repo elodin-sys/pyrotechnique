@@ -18,13 +18,13 @@ use bevy::camera::Exposure;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
 use bevy::time::TimeUpdateStrategy;
-use bevy_hanabi::{EffectAsset, ParticleEffect, Random};
+use bevy_hanabi::{EffectAsset, EffectMaterial, ParticleEffect, Random};
 use bevy_panorbit_camera::PanOrbitCamera;
 use rand::SeedableRng;
 
 use crate::app::SimClock;
 use crate::effects::{Emitter, ShowEmitterGizmos};
-use crate::render::MainCamera;
+use crate::render::{EarthReady, MainCamera};
 use crate::rocket::RocketBounds;
 use crate::scene::SceneConfig;
 
@@ -97,13 +97,19 @@ fn apply_scenario_camera(
     let (rocket_pos, _) = scene.flight.sample(clock.t);
     let (pos, look_at) = preset_pose(preset, rocket_pos);
     *transform = Transform::from_translation(pos).looking_at(look_at, Vec3::Y);
-    *projection = Projection::Perspective(PerspectiveProjection {
-        fov: preset.fov_deg.to_radians(),
-        ..default()
-    });
+    *projection = Projection::Perspective(scene.environment.perspective(preset.fov_deg));
     if let Some(ev100) = scenario.exposure_ev100 {
         exposure.ev100 = ev100;
     }
+}
+
+/// Jump the sim clock for once-burst LEO skies. Pad/ascent on an Earth
+/// scene still integrate from t=0 so Merlin/smoke have history.
+fn capture_jumps_clock(env: &crate::scene::EnvironmentConfig, end_time: f32) -> bool {
+    if env.orbit_period_s <= 1e-3 {
+        return false;
+    }
+    env.orbit_start_s <= 1e-3 || end_time + 1e-3 >= env.orbit_start_s
 }
 
 /// Resolve a camera preset to a world-space (position, look_at) pair.
@@ -132,9 +138,11 @@ fn gate_and_capture(
     mut commands: Commands,
     mut state: ResMut<CaptureState>,
     config: Res<CaptureConfig>,
+    scene: Res<SceneConfig>,
     bounds: Res<RocketBounds>,
+    earth_ready: Res<EarthReady>,
     asset_server: Res<AssetServer>,
-    emitters: Query<&ParticleEffect, With<Emitter>>,
+    emitters: Query<(&ParticleEffect, Option<&EffectMaterial>), With<Emitter>>,
     mut effects: ResMut<Assets<EffectAsset>>,
     mut rng: ResMut<Random>,
     mut clock: ResMut<SimClock>,
@@ -145,18 +153,35 @@ fn gate_and_capture(
             clock.t = 0.0;
             clock.playing = false;
 
-            let assets_ready = !emitters.is_empty()
-                && emitters
-                    .iter()
-                    .all(|e| asset_server.is_loaded_with_dependencies(e.handle.id()));
-            if !(assets_ready && bounds.ready) {
+            let assets_ready = scene.emitters.is_empty() || {
+                let list: Vec<_> = emitters.iter().collect();
+                !list.is_empty()
+                    && list.iter().all(|(effect, material)| {
+                        if !asset_server.is_loaded_with_dependencies(effect.handle.id()) {
+                            return false;
+                        }
+                        let Some(asset) = effects.get(&effect.handle) else {
+                            return false;
+                        };
+                        if asset.texture_layout().layout.is_empty() {
+                            return true;
+                        }
+                        let Some(material) = material else {
+                            return false;
+                        };
+                        material.images.iter().all(|handle| {
+                            asset_server.is_loaded_with_dependencies(handle.id())
+                        })
+                    })
+            };
+            if !(assets_ready && bounds.ready && earth_ready.0) {
                 return;
             }
 
             // Seed CPU spawner RNG and each effect's GPU PRNG. Mutating the
             // assets fires Modified events, which trigger a recompile.
             rng.0 = rand_pcg::Pcg32::seed_from_u64(config.seed as u64);
-            for emitter in &emitters {
+            for (emitter, _) in &emitters {
                 if let Some(mut asset) = effects.get_mut(emitter.handle.id()) {
                     asset.prng_seed = config.seed;
                 }
@@ -171,6 +196,12 @@ fn gate_and_capture(
             }
             *strategy = TimeUpdateStrategy::ManualDuration(config.step);
             clock.playing = true;
+            // Once-burst skies are static. Jump LEO lighting shots; keep
+            // pad/ascent on a real 0→t integrate so plumes have history.
+            if capture_jumps_clock(&scene.environment, config.end_time) {
+                let warmup = 24.0 * config.step.as_secs_f32();
+                clock.t = (config.end_time - warmup).max(0.0);
+            }
             state.phase = CapturePhase::Running;
             info!(
                 "capture started: scenario '{}' to t={:.2}s, seed {}, step {:?}",

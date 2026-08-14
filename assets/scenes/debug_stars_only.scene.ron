@@ -1,0 +1,72 @@
+// Isolate the Hanabi star field (no Earth).
+SceneConfig(
+    model: ModelConfig(
+        path: "models/oresat-low.glb",
+        target_height: 5.4,
+    ),
+    environment: EnvironmentConfig(
+        sun_azimuth_deg: 38.0,
+        sun_elevation_deg: 72.0,
+        sun_illuminance: 100000.0,
+        exposure_ev100: 8.5,
+        bloom_intensity: 0.34,
+        ground_radius: 0.0,
+        ground_color: (0.0, 0.0, 0.0),
+        atmosphere: false,
+        camera_near: 0.08,
+        camera_far: 20000000.0,
+        orbit_period_s: 90.0,
+        night_exposure_ev100: Some(8.5),
+        ambient_brightness: 0.0,
+    ),
+    emitters: [
+        EmitterConfig(
+            name: "stars_dim",
+            effect: "effects/satellite/stars_dim.effect",
+            attach: "sky",
+            position: (0.0, 0.0, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+        ),
+        EmitterConfig(
+            name: "stars_bright",
+            effect: "effects/satellite/stars_bright.effect",
+            attach: "sky",
+            position: (0.0, 0.0, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+        ),
+        EmitterConfig(
+            name: "milky_way",
+            effect: "effects/satellite/milky_way.effect",
+            attach: "sky",
+            position: (0.0, 0.0, 0.0),
+            direction: (0.0, -1.0, 0.0),
+            intensity: 1.0,
+        ),
+    ],
+    flight: FlightConfig(
+        align_to_velocity: false,
+        keyframes: [
+            FlightKey(t: 0.0, pos: (0.0, 0.0, 0.0)),
+            FlightKey(t: 90.0, pos: (0.0, 0.0, 0.0)),
+        ],
+    ),
+    cameras: [
+        CameraPreset(
+            name: "starboard",
+            pos: (9.8, 2.6, 3.8),
+            look_at: (0.4, 2.7, 0.0),
+            fov_deg: 50.0,
+        ),
+    ],
+    scenarios: [
+        ScenarioConfig(
+            name: "stars",
+            camera: "starboard",
+            capture_time: 45.0,
+            reference: Some("targets/satellite/iss-night.jpg"),
+            exposure_ev100: Some(8.5),
+        ),
+    ],
+)

@@ -17,7 +17,7 @@ use bevy_panorbit_camera::PanOrbitCamera;
 
 use crate::app::SimClock;
 use crate::effects::Emitter;
-use crate::render::{EnvironmentEntity, MainCamera, snap_orbit_to_preset};
+use crate::render::{EarthReady, EnvironmentEntity, MainCamera, snap_orbit_to_preset};
 use crate::rocket::{RocketBounds, RocketRoot};
 use crate::scene::{CameraPreset, SceneConfig};
 
@@ -104,6 +104,8 @@ fn handle_load_project(
     mut status: ResMut<ProjectStatus>,
     mut clock: ResMut<SimClock>,
     mut bounds: ResMut<RocketBounds>,
+    mut emitters_ready: ResMut<crate::effects::EmittersReady>,
+    mut earth_ready: ResMut<EarthReady>,
     rockets: Query<Entity, With<RocketRoot>>,
     emitters: Query<Entity, With<Emitter>>,
     environment: Query<Entity, With<EnvironmentEntity>>,
@@ -126,6 +128,8 @@ fn handle_load_project(
         commands.entity(entity).despawn();
     }
     *bounds = RocketBounds::default();
+    *emitters_ready = crate::effects::EmittersReady(false);
+    *earth_ready = EarthReady(false);
     *clock = SimClock {
         t: 0.0,
         playing: false,
@@ -137,7 +141,7 @@ fn handle_load_project(
     if let Ok((mut orbit, mut projection)) = camera.single_mut() {
         let preset = initial_preset(&scene);
         let (rocket_pos, _) = scene.flight.sample(0.0);
-        snap_orbit_to_preset(&mut orbit, &mut projection, &preset, rocket_pos);
+        snap_orbit_to_preset(&mut orbit, &mut projection, &preset, rocket_pos, &scene);
     }
     status.0 = Some(format!("opened project '{name}'"));
     info!("opened project '{name}'");

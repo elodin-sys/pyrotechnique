@@ -53,6 +53,102 @@ pub struct EnvironmentConfig {
     /// black sky, no scattering (e.g. the Moon).
     #[serde(default = "default_true")]
     pub atmosphere: bool,
+    /// Perspective near plane (meters). Bevy default is 0.1.
+    #[serde(default = "default_camera_near")]
+    pub camera_near: f32,
+    /// Perspective far plane (meters). Bevy default is 1000.
+    #[serde(default = "default_camera_far")]
+    pub camera_far: f32,
+    /// Optional true-scale Earth globe (not height-normalized).
+    #[serde(default)]
+    pub earth: Option<EarthConfig>,
+    /// Planet-center override for Bevy `Atmosphere`. Defaults to the Earth
+    /// globe center when `earth` is set.
+    #[serde(default)]
+    pub atmosphere_origin: Option<[f32; 3]>,
+    #[serde(default)]
+    pub atmosphere_inner_radius: Option<f32>,
+    #[serde(default)]
+    pub atmosphere_outer_radius: Option<f32>,
+    /// Raymarch the atmosphere (orbital / distant-planet views).
+    #[serde(default)]
+    pub atmosphere_raymarched: bool,
+    /// Compressed orbital day/night period. `0` = no orbit animation.
+    #[serde(default)]
+    pub orbit_period_s: f32,
+    /// Sim time when `SkyRoot` starts the compressed orbit. Pad/ascent keep
+    /// the authored sun until then (`0` = from t=0, satellite).
+    #[serde(default)]
+    pub orbit_start_s: f32,
+    /// Extra Earth spin about nadir, degrees per orbit.
+    #[serde(default)]
+    pub earth_spin_deg_per_orbit: f32,
+    /// Night-side EV100; interpolated from `exposure_ev100` over the orbit.
+    #[serde(default)]
+    pub night_exposure_ev100: Option<f32>,
+    /// Fill light from the Earth disc onto the craft (lux). `0` = off.
+    #[serde(default)]
+    pub earthshine_illuminance: f32,
+    /// Dim fill on the camera-facing Earth hemisphere at night (lux). `0` = off.
+    #[serde(default)]
+    pub night_globe_illuminance: f32,
+    /// `GlobalAmbientLight` brightness. Bevy default is 80; LEO wants 0.
+    #[serde(default = "default_ambient_brightness")]
+    pub ambient_brightness: f32,
+    /// Optional cubemap skybox (`*.cubemap.ktx2`). Brightness follows star visibility.
+    #[serde(default)]
+    pub skybox: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct EarthConfig {
+    /// Asset-relative GLB path.
+    pub path: String,
+    /// Orbital altitude above the surface (meters).
+    #[serde(default = "default_earth_altitude")]
+    pub altitude_m: f32,
+    /// Planet radius (meters). `earth.glb` at scale 1 is ~6_378_140.
+    #[serde(default = "default_earth_radius")]
+    pub radius_m: f32,
+    #[serde(default)]
+    pub rotation_deg: [f32; 3],
+}
+
+impl EarthConfig {
+    /// Earth center in the satellite-local frame (craft at origin, nadir −Y).
+    pub fn center(&self) -> Vec3 {
+        Vec3::new(0.0, -(self.radius_m + self.altitude_m), 0.0)
+    }
+
+    /// Rotation that puts `(lat, lon)` from `rotation_deg` at local +Y (nadir).
+    ///
+    /// `rotation_deg` is `(lat_deg, lon_deg, roll_deg)` in a +Y-north /
+    /// +X-lon0 globe. Roll is about the nadir axis after that mapping.
+    pub fn orient(&self) -> Quat {
+        let lat = self.rotation_deg[0].to_radians();
+        let lon = self.rotation_deg[1].to_radians();
+        let roll = self.rotation_deg[2].to_radians();
+        let n = Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
+        let face = Quat::from_rotation_arc(n.normalize_or(Vec3::Y), Vec3::Y);
+        face * Quat::from_axis_angle(Vec3::Y, roll)
+    }
+}
+
+impl EnvironmentConfig {
+    pub fn perspective(&self, fov_deg: f32) -> PerspectiveProjection {
+        PerspectiveProjection {
+            fov: fov_deg.to_radians(),
+            near: self.camera_near.max(0.01),
+            far: self.camera_far.max(self.camera_near + 1.0),
+            ..default()
+        }
+    }
+
+    pub fn atmosphere_center(&self) -> Option<Vec3> {
+        self.atmosphere_origin
+            .map(Vec3::from)
+            .or_else(|| self.earth.as_ref().map(EarthConfig::center))
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -71,9 +167,8 @@ pub struct EmitterConfig {
     /// interpolated, clamped at the ends. Empty means "always 1.0".
     #[serde(default)]
     pub activity: Vec<[f32; 2]>,
-    /// What the emitter is attached to: "rocket" (default; rides the vehicle,
-    /// position/direction in the rocket frame) or "world" (fixed in world
-    /// space — e.g. pad smoke that must stay at the launch pad).
+    /// What the emitter is attached to: "rocket" (default), "world" (fixed),
+    /// "earth" (Earth globe root), or "sky" (inertial frame / orbit).
     #[serde(default = "default_attach")]
     pub attach: String,
     /// Optional dynamic light at the emitter, scaled by the same
@@ -121,6 +216,26 @@ fn default_true() -> bool {
 
 fn default_attach() -> String {
     "rocket".to_string()
+}
+
+fn default_camera_near() -> f32 {
+    0.1
+}
+
+fn default_camera_far() -> f32 {
+    1000.0
+}
+
+fn default_earth_altitude() -> f32 {
+    400_000.0
+}
+
+fn default_earth_radius() -> f32 {
+    6_378_140.0
+}
+
+fn default_ambient_brightness() -> f32 {
+    80.0
 }
 
 impl EmitterConfig {
