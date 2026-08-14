@@ -76,6 +76,7 @@ pub fn build_base_app(config: BaseConfig) -> App {
     .add_plugins(crate::rocket::RocketPlugin)
     .add_plugins(crate::flight::FlightPlugin)
     .add_plugins(crate::orbit::OrbitPlugin)
+    .add_plugins(crate::earth_env::EarthEnvPlugin)
     .add_plugins(crate::effects::EmitterPlugin);
     app
 }

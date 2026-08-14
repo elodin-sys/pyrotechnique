@@ -243,12 +243,22 @@ fn ensure_environment(
     }
 
     if env.atmosphere {
-        let mut medium_asset = ScatteringMedium::earth(256, 256);
-        // Orbital views look through the whole column; full Earth density
-        // turns the disc into a featureless haze and veils the sky.
-        if env.atmosphere_raymarched {
-            medium_asset = medium_asset.with_density_multiplier(0.16);
-        }
+        let density = if let Some(earth) = &env.earth {
+            let (rocket_pos, _) = scene.flight.sample(0.0);
+            let preset = crate::project::initial_preset(&scene);
+            let (cam_pos, _) = crate::capture::preset_pose(&preset, rocket_pos);
+            crate::earth_env::atmosphere_density(crate::earth_env::altitude_above(
+                cam_pos,
+                earth.center(),
+                earth.radius_m,
+            ))
+        } else if env.atmosphere_raymarched {
+            0.16
+        } else {
+            1.0
+        };
+        let medium_asset =
+            ScatteringMedium::earth(256, 256).with_density_multiplier(density);
         let medium = media.add(medium_asset);
         let inner = env.atmosphere_inner_radius.unwrap_or(6_360_000.0);
         let outer = env.atmosphere_outer_radius.unwrap_or(inner + 100_000.0);
@@ -286,9 +296,10 @@ fn ensure_environment(
             Name::new("ground"),
             Mesh3d(meshes.add(Circle::new(env.ground_radius))),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(c[0], c[1], c[2]),
+                base_color: Color::srgba(c[0], c[1], c[2], 1.0),
                 perceptual_roughness: 1.0,
                 metallic: 0.0,
+                alpha_mode: AlphaMode::Blend,
                 ..default()
             })),
             Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
@@ -335,7 +346,8 @@ fn ensure_environment(
         exposure.ev100 = env.exposure_ev100;
         bloom.intensity = env.bloom_intensity;
         *atmo = atmosphere_settings(env);
-        cam.clear_color = if env.atmosphere && !env.atmosphere_raymarched {
+        cam.clear_color = if env.atmosphere && !env.atmosphere_raymarched && env.earth.is_none()
+        {
             ClearColorConfig::Default
         } else {
             ClearColorConfig::Custom(Color::BLACK)

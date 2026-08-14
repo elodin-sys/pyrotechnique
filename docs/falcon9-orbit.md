@@ -15,23 +15,24 @@ from t=0 so the limb exists even when you are not looking at it.
 Do not put the vehicle at ECEF radius 6.37e6. A 400 km climb is ~3% of the
 15,000 km star sphere, so stars stay parented to `SkyRoot` at the pad.
 
-Lighting uses **radial** `up = normalize(rocket.pos - earth.center)` once
-downrange is large. Sun for Act 1 is the falcon9 afternoon (az 300, el 38).
-`orbit_start_s: 140` begins the compressed SkyRoot +X day/night used by the
-satellite stills (`t=140` day, `185` night).
+View-dependent knobs use **camera** radial
+`up = normalize(camera.pos - earth.center)` (`src/earth_env.rs`). Earthshine
+still aims Earth→craft. Sun for Act 1 is the falcon9 afternoon (az 300,
+el 38). `orbit_start_s: 140` begins the compressed SkyRoot +X day/night
+(`t=140` day, `185` night).
 
 ## Altitude contract
 
-`orbit.rs` derives `|rocket.pos - earth.center| - R` each frame:
+`earth_env.rs` derives `|camera.pos - earth.center| - R` each frame:
 
-| Altitude | Atmosphere | Density | Stars / cities / airglow |
+| Camera altitude | Atmosphere | Density | Stars / cities / airglow |
 |---|---|---|---|
-| 0–20 km | LookupTexture | 1.0 | Off (`space_visibility = 0`) |
+| 0–20 km | Raymarched | 1.0 | Off (`space_visibility = 0`) |
 | 20–80 km | Raymarched | 1.0 → 0.16 | Fades in if the sun is down |
 | 80 km+ | Raymarched | 0.16 | `star_vis = star_visibility(el) * space_visibility(h)` |
 
-The local khaki pad disc (~20 km) hides between 5–8 km. 8K Earth is too
-coarse for lift-off grit; Elodin uses the same supplement.
+The local khaki pad disc (~20 km) is Blend from spawn and fades 3–8 km.
+8K Earth is too coarse for lift-off grit. See `docs/camera-driven-earth.md`.
 
 ## Scenarios
 
@@ -43,10 +44,11 @@ Act 1 cameras and times match `falcon9` (`lift-off` … `smoke-trail`). New:
 | `leo-day-limb` | 140 | 13.5 | vs `targets/satellite/` day limb |
 | `leo-night-cities` | 185 | 9 | vs satellite night cities |
 | `leo-airglow` | 185 | 9 | vs satellite night limb |
+| `zoom-2km` / `30km` / `150km` | 5 | — | Camera-altitude continuity (no reference) |
 
 LEO composition differs (Falcon 9 vs OreSat); lighting is the check.
-Capture jumps to t after 80 s so the once-burst sky does not simulate a
-full ascent. Pad/ascent still integrate from 0.
+Capture jumps only for `end_time >= orbit_start_s` (or satellite, where
+`orbit_start_s` is 0). `karman` still integrates from 0 so the trail exists.
 
 ```bash
 cargo run -q -- capture --project falcon9-orbit --scenario lift-off --compare auto

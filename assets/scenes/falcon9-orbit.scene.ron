@@ -24,7 +24,7 @@ SceneConfig(
         )),
         atmosphere_inner_radius: Some(6378140.0),
         atmosphere_outer_radius: Some(6458140.0),
-        atmosphere_raymarched: false,
+        atmosphere_raymarched: true,
         orbit_period_s: 90.0,
         orbit_start_s: 140.0,
         earth_spin_deg_per_orbit: 20.0,
@@ -261,6 +261,24 @@ SceneConfig(
             track_rocket: true,
             follow_pos: true,
         ),
+        CameraPreset(
+            name: "zoom-2km",
+            pos: (800.0, 2000.0, 1200.0),
+            look_at: (0.0, 0.0, 0.0),
+            fov_deg: 55.0,
+        ),
+        CameraPreset(
+            name: "zoom-30km",
+            pos: (8000.0, 30000.0, 12000.0),
+            look_at: (0.0, 0.0, 0.0),
+            fov_deg: 55.0,
+        ),
+        CameraPreset(
+            name: "zoom-150km",
+            pos: (40000.0, 150000.0, 60000.0),
+            look_at: (0.0, 20000.0, 0.0),
+            fov_deg: 55.0,
+        ),
     ],
     scenarios: [
         ScenarioConfig(
@@ -326,6 +344,21 @@ SceneConfig(
             capture_time: 185.0,
             reference: Some("targets/satellite/low-earth-orbit-night.png"),
             exposure_ev100: Some(9.0),
+        ),
+        ScenarioConfig(
+            name: "zoom-2km",
+            camera: "zoom-2km",
+            capture_time: 5.0,
+        ),
+        ScenarioConfig(
+            name: "zoom-30km",
+            camera: "zoom-30km",
+            capture_time: 5.0,
+        ),
+        ScenarioConfig(
+            name: "zoom-150km",
+            camera: "zoom-150km",
+            capture_time: 5.0,
         ),
     ],
 )

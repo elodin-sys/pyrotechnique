@@ -10,6 +10,7 @@
 
 mod app;
 mod capture;
+mod earth_env;
 mod effects;
 mod flight;
 mod orbit;

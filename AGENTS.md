@@ -29,7 +29,8 @@ cargo run -q -- capture --project falcon9 --scenario lift-off --compare auto
 
 Scenarios — falcon9: `lift-off`, `ascent`, `max-q`, `mid-flight`,
 `smoke-trail`. falcon9-orbit: those plus `karman`, `leo-day-limb`,
-`leo-night-cities`, `leo-airglow` (`docs/falcon9-orbit.md`). apollo-lander:
+`leo-night-cities`, `leo-airglow`, `zoom-2km` / `zoom-30km` / `zoom-150km`
+(`docs/falcon9-orbit.md`, `docs/camera-driven-earth.md`). apollo-lander:
 `plume-side`, `plume-side-90` (90° azimuth consistency check),
 `plume-closeup` (First Man bell close-up), `plume-top`, `rcs-far`,
 `rcs-close`, `ground-effect`, `touchdown`. rocket (2 m model rocket, 6 s
@@ -117,7 +118,8 @@ needs `ground_radius: 0`, `camera_far ≥ 2e7`, `earth: Some(...)`, and
 `orbit_period_s: 90`. `earth.rotation_deg` is `(lat_deg, lon_deg, roll_deg)`
 so that geographic point faces the craft (current: Cairo/Nile ≈ `(30, 31, 0)`).
 `falcon9-orbit` is the same globe with the rocket flying (`altitude_m: 0`,
-Florida nadir, `orbit_start_s: 140`). See `docs/falcon9-orbit.md`.
+Florida nadir, `orbit_start_s: 140`). Camera-driven Earth knobs live in
+`src/earth_env.rs`. See `docs/falcon9-orbit.md`.
 
 ## Satellite (LEO / Hanabi sky)
 

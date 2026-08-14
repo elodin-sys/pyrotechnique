@@ -70,8 +70,9 @@ cargo run -- gen-effects
 
 Scenarios — falcon9: `lift-off`, `ascent`, `max-q`, `mid-flight`,
 `smoke-trail`. falcon9-orbit: those plus `karman`, `leo-day-limb`,
-`leo-night-cities`, `leo-airglow` (pad → LEO on Florida Earth; see
-`docs/falcon9-orbit.md`). apollo-lander: `plume-side`, `plume-side-90`, `plume-closeup`,
+`leo-night-cities`, `leo-airglow`, `zoom-2km` / `zoom-30km` / `zoom-150km`
+(pad → LEO on Florida Earth; see `docs/falcon9-orbit.md`). apollo-lander:
+`plume-side`, `plume-side-90`, `plume-closeup`,
 `plume-top`, `rcs-far`, `rcs-close`, `ground-effect`, `touchdown`. satellite:
 `day-limb`, `day-look-down`, `dusk-terminator`, `night-airglow`,
 `night-cities`, `starboard`, `milky-way` (`cargo run -- edit satellite`;
@@ -256,7 +257,8 @@ src/
 ├── app.rs         shared app assembly, SimClock
 ├── project.rs     Project resource, discovery, runtime project switching
 ├── render.rs      HDR camera, atmosphere, sun, ground, Earth, SkyRoot
-├── orbit.rs       90 s LEO day/night: SkyRoot spin, star/city intensity
+├── orbit.rs       SkyRoot / Earth spin from orbit phase
+├── earth_env.rs   camera-driven Earth: density, disc, stars, EV
 ├── rocket.rs      GLB load + normalization (RocketBounds)
 ├── flight.rs      flight-path -> rocket transform
 ├── scene.rs       scene RON schema + sampling helpers

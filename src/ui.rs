@@ -50,7 +50,7 @@ impl Plugin for EditorUiPlugin {
         app.add_plugins(EguiPlugin::default())
             .init_resource::<UiState>()
             .add_systems(EguiPrimaryContextPass, ui_system)
-            .add_systems(Update, invalidate_on_external_reload)
+            .add_systems(Update, (follow_editor_camera, invalidate_on_external_reload))
             .add_systems(Last, flush_saves_on_exit);
     }
 }
@@ -88,6 +88,8 @@ pub struct UiState {
     reference_scenario: Option<String>,
     reference_texture: Option<(String, egui::TextureHandle, egui::Vec2)>,
     status: String,
+    /// Camera preset that rides the rocket each frame (`track_rocket`).
+    follow_camera: Option<String>,
 }
 
 #[derive(SystemParam)]
@@ -129,6 +131,7 @@ fn ui_system(mut contexts: EguiContexts, mut p: UiParams) -> Result {
         p.ui_state.reference_scenario = None;
         p.ui_state.reference_texture = None;
         p.ui_state.show_reference = false;
+        p.ui_state.follow_camera = None;
     }
     if let Some(message) = p.project_status.0.take() {
         p.ui_state.status = message;
@@ -269,10 +272,15 @@ fn top_bar(ctx: &mut egui::Context, p: &mut UiParams) {
                 apply_scenario(p, &name);
             }
 
-            // Bare camera preset snap.
+            // Bare camera preset snap. Follow-pos cameras stay locked on.
             let mut chosen_camera: Option<String> = None;
+            let camera_label = p
+                .ui_state
+                .follow_camera
+                .as_deref()
+                .unwrap_or("-");
             egui::ComboBox::from_label("camera")
-                .selected_text("-")
+                .selected_text(camera_label)
                 .show_ui(ui, |ui| {
                     for c in &p.scene.cameras {
                         if ui.selectable_label(false, &c.name).clicked() {
@@ -283,7 +291,29 @@ fn top_bar(ctx: &mut egui::Context, p: &mut UiParams) {
             if let Some(name) = chosen_camera
                 && let Some(preset) = p.scene.camera(&name).cloned()
             {
+                p.ui_state.follow_camera = preset
+                    .track_rocket
+                    .then_some(name);
                 snap_camera(p, &preset);
+            }
+            let mut follow = p.ui_state.follow_camera.is_some();
+            if ui.checkbox(&mut follow, "follow").changed() {
+                if follow {
+                    if p.ui_state.follow_camera.is_none() {
+                        if let Some(preset) = p
+                            .scene
+                            .cameras
+                            .iter()
+                            .find(|c| c.track_rocket)
+                            .cloned()
+                        {
+                            p.ui_state.follow_camera = Some(preset.name.clone());
+                            snap_camera(p, &preset);
+                        }
+                    }
+                } else {
+                    p.ui_state.follow_camera = None;
+                }
             }
 
             ui.separator();
@@ -319,6 +349,7 @@ fn apply_scenario(p: &mut UiParams, name: &str) {
     p.clock.t = scenario.capture_time;
     p.clock.playing = false;
     if let Some(preset) = p.scene.camera(&scenario.camera).cloned() {
+        p.ui_state.follow_camera = preset.track_rocket.then_some(preset.name.clone());
         snap_camera(p, &preset);
     }
     if let Some(ev100) = scenario.exposure_ev100
@@ -336,6 +367,44 @@ fn snap_camera(p: &mut UiParams, preset: &CameraPreset) {
         return;
     };
     crate::render::snap_orbit_to_preset(&mut orbit, &mut projection, preset, rocket_pos, &p.scene);
+    lock_orbit_to_preset(&mut orbit, preset, rocket_pos);
+}
+
+/// Keep a tracking preset on the rocket every frame (edit-mode chase).
+fn follow_editor_camera(
+    ui_state: Res<UiState>,
+    scene: Res<SceneConfig>,
+    clock: Res<SimClock>,
+    mut camera: Query<(&mut PanOrbitCamera, &mut Projection), With<MainCamera>>,
+) {
+    let Some(name) = ui_state.follow_camera.as_deref() else {
+        return;
+    };
+    let Some(preset) = scene.camera(name) else {
+        return;
+    };
+    if !preset.track_rocket {
+        return;
+    }
+    let Ok((mut orbit, mut projection)) = camera.single_mut() else {
+        return;
+    };
+    let (rocket_pos, _) = scene.flight.sample(clock.t);
+    crate::render::snap_orbit_to_preset(&mut orbit, &mut projection, preset, rocket_pos, &scene);
+    lock_orbit_to_preset(&mut orbit, preset, rocket_pos);
+}
+
+fn lock_orbit_to_preset(orbit: &mut PanOrbitCamera, preset: &CameraPreset, rocket_pos: Vec3) {
+    let (pos, look_at) = crate::capture::preset_pose(preset, rocket_pos);
+    let offset = pos - look_at;
+    let radius = offset.length().max(0.01);
+    let yaw = f32::atan2(offset.x, offset.z);
+    let pitch = (offset.y / radius).clamp(-1.0, 1.0).asin();
+    orbit.focus = look_at;
+    orbit.radius = Some(radius);
+    orbit.yaw = Some(yaw);
+    orbit.pitch = Some(pitch);
+    orbit.force_update = true;
 }
 
 // ---------------------------------------------------------------------------

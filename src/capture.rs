@@ -109,10 +109,7 @@ fn capture_jumps_clock(env: &crate::scene::EnvironmentConfig, end_time: f32) -> 
     if env.orbit_period_s <= 1e-3 {
         return false;
     }
-    if env.orbit_start_s <= 1e-3 {
-        return true;
-    }
-    env.earth.is_some() && env.skybox.is_some() && end_time > 80.0
+    env.orbit_start_s <= 1e-3 || end_time + 1e-3 >= env.orbit_start_s
 }
 
 /// Resolve a camera preset to a world-space (position, look_at) pair.
