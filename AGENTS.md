@@ -28,14 +28,15 @@ cargo run -q -- capture --project falcon9 --scenario lift-off --compare auto
 ```
 
 Scenarios — falcon9: `lift-off`, `ascent`, `max-q`, `mid-flight`,
-`smoke-trail`. apollo-lander: `plume-side`, `plume-side-90` (90° azimuth
-consistency check), `plume-closeup` (First Man bell close-up), `plume-top`,
-`rcs-far`, `rcs-close`, `ground-effect`, `touchdown`. rocket (2 m model
-rocket, 6 s boost): `initial-boost`, `mid-boost`, `late-boost`. satellite:
-`day-limb`, `day-look-down`, `dusk-terminator`, `night-airglow`,
-`night-cities`, `starboard`, `milky-way`. Debug isolates:
-`debug_sat_only`, `debug_earth_only`, `debug_stars_only`,
-`debug_cities_only`.
+`smoke-trail`. falcon9-orbit: those plus `karman`, `leo-day-limb`,
+`leo-night-cities`, `leo-airglow` (`docs/falcon9-orbit.md`). apollo-lander:
+`plume-side`, `plume-side-90` (90° azimuth consistency check),
+`plume-closeup` (First Man bell close-up), `plume-top`, `rcs-far`,
+`rcs-close`, `ground-effect`, `touchdown`. rocket (2 m model rocket, 6 s
+boost): `initial-boost`, `mid-boost`, `late-boost`. satellite: `day-limb`,
+`day-look-down`, `dusk-terminator`, `night-airglow`, `night-cities`,
+`starboard`, `milky-way`. Debug isolates: `debug_sat_only`,
+`debug_earth_only`, `debug_stars_only`, `debug_cities_only`.
 
 Useful flags: `--time <s>` (override capture time), `--seed <n>`, `--size WxH`,
 `--fps <hz>`, `--out <path>`. `--project` also selects debug scenes (e.g.
@@ -115,6 +116,8 @@ Scene flags for non-Earth/non-rocket scenes: `environment.atmosphere: false`
 needs `ground_radius: 0`, `camera_far ≥ 2e7`, `earth: Some(...)`, and
 `orbit_period_s: 90`. `earth.rotation_deg` is `(lat_deg, lon_deg, roll_deg)`
 so that geographic point faces the craft (current: Cairo/Nile ≈ `(30, 31, 0)`).
+`falcon9-orbit` is the same globe with the rocket flying (`altitude_m: 0`,
+Florida nadir, `orbit_start_s: 140`). See `docs/falcon9-orbit.md`.
 
 ## Satellite (LEO / Hanabi sky)
 

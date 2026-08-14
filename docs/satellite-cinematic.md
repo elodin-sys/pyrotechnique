@@ -132,3 +132,6 @@ just readable. Both fade to zero at noon. Do not raise `GlobalAmbientLight`.
 - Playing 0–90 s is a continuous day→night→day pass: stars and cities fade with
   the terminator, exposure tracks, no pops.
 - Debug scenes still isolate craft / Earth / stars / cities.
+
+The same sky/earth stack on a flying Falcon 9 is `falcon9-orbit` (Florida
+nadir, pad → 400 km). See `docs/falcon9-orbit.md`. This scene stays Cairo.

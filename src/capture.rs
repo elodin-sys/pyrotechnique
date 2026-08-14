@@ -103,6 +103,18 @@ fn apply_scenario_camera(
     }
 }
 
+/// Jump the sim clock for once-burst LEO skies. Pad/ascent on an Earth
+/// scene still integrate from t=0 so Merlin/smoke have history.
+fn capture_jumps_clock(env: &crate::scene::EnvironmentConfig, end_time: f32) -> bool {
+    if env.orbit_period_s <= 1e-3 {
+        return false;
+    }
+    if env.orbit_start_s <= 1e-3 {
+        return true;
+    }
+    env.earth.is_some() && env.skybox.is_some() && end_time > 80.0
+}
+
 /// Resolve a camera preset to a world-space (position, look_at) pair.
 pub fn preset_pose(preset: &crate::scene::CameraPreset, rocket_pos: Vec3) -> (Vec3, Vec3) {
     let base_pos = Vec3::from(preset.pos);
@@ -187,9 +199,9 @@ fn gate_and_capture(
             }
             *strategy = TimeUpdateStrategy::ManualDuration(config.step);
             clock.playing = true;
-            // Once-burst LEO fields are static; jump to the scenario time so a
-            // 45 s midnight capture is a few frames, not 2700.
-            if scene.environment.orbit_period_s > 0.0 {
+            // Once-burst skies are static. Jump LEO lighting shots; keep
+            // pad/ascent on a real 0→t integrate so plumes have history.
+            if capture_jumps_clock(&scene.environment, config.end_time) {
                 let warmup = 24.0 * config.step.as_secs_f32();
                 clock.t = (config.end_time - warmup).max(0.0);
             }

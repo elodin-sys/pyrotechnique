@@ -69,7 +69,9 @@ cargo run -- gen-effects
 ```
 
 Scenarios — falcon9: `lift-off`, `ascent`, `max-q`, `mid-flight`,
-`smoke-trail`. apollo-lander: `plume-side`, `plume-side-90`, `plume-closeup`,
+`smoke-trail`. falcon9-orbit: those plus `karman`, `leo-day-limb`,
+`leo-night-cities`, `leo-airglow` (pad → LEO on Florida Earth; see
+`docs/falcon9-orbit.md`). apollo-lander: `plume-side`, `plume-side-90`, `plume-closeup`,
 `plume-top`, `rcs-far`, `rcs-close`, `ground-effect`, `touchdown`. satellite:
 `day-limb`, `day-look-down`, `dusk-terminator`, `night-airglow`,
 `night-cities`, `starboard`, `milky-way` (`cargo run -- edit satellite`;
@@ -169,6 +171,8 @@ Scene flags for non-Earth, non-rocket, and LEO scenes:
 - `environment.earth` — second GLB at true radius, not height-normalized.
 - `attach: "earth"` / `"sky"` — parent emitters to `EarthRoot` or `SkyRoot`
   (inertial frame that rotates once per `orbit_period_s`).
+- `environment.orbit_start_s` — delay that spin so a pad/ascent keeps the
+  authored sun (`falcon9-orbit` starts the LEO lighting chapter at t=140).
 
 ## The built-in effects
 

@@ -47,6 +47,10 @@ pub struct EarthGlobeMaterial;
 #[derive(Component)]
 pub struct EarthCloudsMaterial;
 
+/// Local pad disc; faded out by ~5–8 km so the globe takes over.
+#[derive(Component)]
+pub struct PadDisc;
+
 /// Atmosphere whose [`GlobalTransform`] is the planet center (Earth).
 #[derive(Component)]
 pub struct OrbitalAtmosphere;
@@ -132,7 +136,11 @@ fn setup_camera(mut commands: Commands, scene: Res<SceneConfig>) {
 }
 
 pub fn atmosphere_settings(env: &crate::scene::EnvironmentConfig) -> AtmosphereSettings {
-    if env.atmosphere_raymarched {
+    atmosphere_settings_mode(env.atmosphere_raymarched)
+}
+
+pub fn atmosphere_settings_mode(raymarched: bool) -> AtmosphereSettings {
+    if raymarched {
         AtmosphereSettings {
             aerial_view_lut_max_distance: 3.2e5,
             rendering_method: AtmosphereMode::Raymarched,
@@ -184,9 +192,8 @@ fn ensure_environment(
 
     let azimuth = env.sun_azimuth_deg.to_radians();
     let elevation = env.sun_elevation_deg.to_radians();
-    // Compressed LEO orbit: t=0 is noon (sun along +Y). Scene azimuth/elevation
-    // still aim the sun for non-orbit projects.
-    let sun_rotation = if env.orbit_period_s > 1e-3 {
+    // Compressed LEO from t=0: noon along +Y. Delayed orbit (ascent) keeps az/el.
+    let sun_rotation = if env.orbit_period_s > 1e-3 && env.orbit_start_s <= 1e-3 {
         Quat::from_rotation_arc(Vec3::Z, Vec3::Y)
     } else {
         Quat::from_euler(EulerRot::YXZ, -azimuth, -elevation, 0.0)
@@ -275,6 +282,7 @@ fn ensure_environment(
         let c = env.ground_color;
         commands.spawn((
             EnvironmentEntity,
+            PadDisc,
             Name::new("ground"),
             Mesh3d(meshes.add(Circle::new(env.ground_radius))),
             MeshMaterial3d(materials.add(StandardMaterial {
@@ -284,6 +292,7 @@ fn ensure_environment(
                 ..default()
             })),
             Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+            Visibility::default(),
         ));
     }
 

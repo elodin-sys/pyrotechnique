@@ -239,6 +239,9 @@ fn top_bar(ctx: &mut egui::Context, p: &mut UiParams) {
                 .flight
                 .duration()
                 .max(p.scene.environment.orbit_period_s)
+                .max(
+                    p.scene.environment.orbit_start_s + p.scene.environment.orbit_period_s,
+                )
                 .max(1.0);
             ui.label("t");
             let mut t = p.clock.t;

@@ -76,6 +76,10 @@ pub struct EnvironmentConfig {
     /// Compressed orbital day/night period. `0` = no orbit animation.
     #[serde(default)]
     pub orbit_period_s: f32,
+    /// Sim time when `SkyRoot` starts the compressed orbit. Pad/ascent keep
+    /// the authored sun until then (`0` = from t=0, satellite).
+    #[serde(default)]
+    pub orbit_start_s: f32,
     /// Extra Earth spin about nadir, degrees per orbit.
     #[serde(default)]
     pub earth_spin_deg_per_orbit: f32,
