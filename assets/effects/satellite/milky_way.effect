@@ -36,13 +36,13 @@
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "age",
-        value: "#18",
+        value: "#22",
       ),
     },
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "lifetime",
-        value: "#17",
+        value: "#21",
       ),
     },
   ],
@@ -50,7 +50,7 @@
     {
       "bevy_hanabi::modifier::attr::SetAttributeModifier": (
         attribute: "color",
-        value: "#25",
+        value: "#29",
       ),
     },
   ],
@@ -63,7 +63,7 @@
     },
     {
       "bevy_hanabi::modifier::output::ParticleTextureModifier": (
-        texture_slot: "#26",
+        texture_slot: "#30",
         sample_mapping: ModulateOpacityFromR,
       ),
     },
@@ -139,7 +139,6 @@
         expr: "#9",
       ),
       Literal(Vector(Vec3((0.17988312, 0.9194026, 0.34977272)))),
-      Literal(Scalar(Float(0.22))),
       Binary(
         op: Dot,
         left: "#10",
@@ -147,18 +146,36 @@
       ),
       Unary(
         op: Abs,
-        expr: "#13",
+        expr: "#12",
       ),
-      Binary(
-        op: Step,
-        left: "#14",
-        right: "#12",
-      ),
-      Literal(Scalar(Float(1000000000.0))),
       Binary(
         op: Mul,
-        left: "#16",
+        left: "#13",
+        right: "#13",
+      ),
+      Literal(Scalar(Float(-10.3))),
+      Binary(
+        op: Mul,
+        left: "#14",
         right: "#15",
+      ),
+      Unary(
+        op: Exp,
+        expr: "#16",
+      ),
+      Literal(Scalar(Float(1000000000.0))),
+      BuiltIn((
+        operator: Rand(Scalar(Float)),
+      )),
+      Binary(
+        op: Step,
+        left: "#19",
+        right: "#17",
+      ),
+      Binary(
+        op: Mul,
+        left: "#18",
+        right: "#20",
       ),
       Literal(Scalar(Float(0.0))),
       Attribute((
@@ -167,24 +184,24 @@
       Property(1),
       Binary(
         op: Mul,
-        left: "#19",
-        right: "#20",
+        left: "#23",
+        right: "#24",
       ),
       Ternary(
         op: Vec3,
-        first: "#21",
-        second: "#21",
-        third: "#21",
+        first: "#25",
+        second: "#25",
+        third: "#25",
       ),
       Literal(Scalar(Float(1.0))),
       Binary(
         op: Vec4XyzW,
-        left: "#22",
-        right: "#23",
+        left: "#26",
+        right: "#27",
       ),
       Unary(
         op: Pack4x8unorm,
-        expr: "#24",
+        expr: "#28",
       ),
       Literal(Scalar(Uint(0))),
     ],

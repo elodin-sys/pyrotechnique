@@ -65,7 +65,7 @@ applies it. Stars sized in “pixels” at 15,000 km are invisible. Use world me
 |---|---|---|---|
 | `stars_dim` | sky | ~800k | Uniform sphere, radius 1.5e7 m. Power-law magnitude. |
 | `stars_bright` | sky | ~40k | Same sphere, larger/hotter, some color temp. Bloom bait. |
-| `milky_way` | sky | ~400k | Same sphere, keep a band near a galactic plane. Warmer, dusty. |
+| `milky_way` | sky | ~400k | Same sphere, dense near a galactic plane with a soft latitude fade. Warmer, dusty. |
 | `city_lights` | earth | ~1.5M | Inverse-CDF on the 128×64 night-tile map, then `R+8 km`. Color from `night.jpg`; `luma_kill` drops leftover ocean. |
 | `airglow_green` | earth | ~520k | Shell at `R+95 km`. Tight limb × night. Intensity ramps after the terminator. |
 | `airglow_red` | earth | ~340k | Shell at `R+150 km`, a faint red/orange whisper above the green. |

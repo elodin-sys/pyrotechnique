@@ -1527,8 +1527,13 @@ fn milky_way() -> EffectAsset {
 
     let n = writer.attr(Attribute::POSITION).normalized();
     let pole = writer.lit(Vec3::new(0.18, 0.92, 0.35).normalize());
-    let keep = writer.lit(0.22).step(n.dot(pole).abs());
-    let (init_age, init_lifetime) = init_age_lifetime(&writer, writer.lit(VACUUM_LIFETIME) * keep);
+    let lat = n.dot(pole).abs();
+    // Gaussian in galactic latitude so density feathers; old step(|lat|<0.22) was a hard strip.
+    let keep = (lat.clone() * lat * writer.lit(-10.3)).exp();
+    let (init_age, init_lifetime) = init_age_lifetime(
+        &writer,
+        writer.lit(VACUUM_LIFETIME) * keep.step(writer.rand(ScalarType::Float)),
+    );
 
     let scale = writer.attr(Attribute::F32_0) * writer.prop(intensity);
     let update_color = SetAttributeModifier::new(Attribute::COLOR, packed_scale(&writer, scale));
