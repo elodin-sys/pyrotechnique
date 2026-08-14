@@ -10,7 +10,8 @@ out of `pyrotechnique/assets/`.
 |---|---|
 | `assets/models/earth_v5.glb` | 200k-tri globe + cloud shell, 8K maps embedded. Node scale 1004.906 → world R = 6_378_140 m. Clouds at ×1.000627 (R+4 km). |
 | `assets/textures/earth/color_aug.jpg` | August albedo (also inside the GLB). |
-| `assets/textures/earth/night.jpg` | Bright night lights. Hanabi `"night"` slot **and** GLB emissive. |
+| `assets/textures/earth/night.jpg` | 32K→8K night lights, veil crushed below luma 0.06. Hanabi `"night"` slot **and** GLB emissive. |
+| `assets/textures/earth/city_tile_cdf.bin` | 128×64 luma×cos(lat) tile CDF (8192 f32). Embedded into `city_lights` by `gen-effects`. |
 | `assets/textures/earth/clouds_*.jpg` | Less_Clouds color + alpha (also inside the GLB). |
 | `assets/textures/earth/normal.png` | Terrain normal (also inside the GLB). |
 | `assets/textures/earth/roughness.jpg` | Invert(gloss) × water mask from landcover. |
@@ -23,9 +24,12 @@ Keep them. `gen-effects` does not touch any of these.
 
 - Scenes `satellite`, `debug_earth_only`, `debug_cities_only` load `earth_v5.glb`.
 - Globe emissive is tagged `EarthGlobeMaterial` and scaled by `star_visibility`
-  (`EARTH_EMISSIVE_NIGHT = 1.6`). Noon is black. Hanabi cities still do bloom.
+  (`EARTH_EMISSIVE_NIGHT = 120`). Noon is black. That sheet is the continuous
+  city web; Hanabi sparkle sits on the same lights.
 - Clouds are a second mesh, alpha blend, parented with the globe so
-  `orient()` and the 20°/orbit spin stay locked.
+  `orient()` and the 20°/orbit spin stay locked. Opacity fades with
+  `nightglow_visibility` (full through dusk, 0.05 at midnight) so the shell
+  does not sit in front of the emissive.
 - `environment.skybox` loads the cubemap onto `MainCamera`. Brightness is
   `1000 * star_visibility` (noon = 0). Rotation follows `SkyRoot`. No
   `EnvironmentMapLight`. Bevy needs `ktx2` + `basis-universal` to transcode

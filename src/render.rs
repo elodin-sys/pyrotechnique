@@ -43,6 +43,10 @@ pub struct NightGlobeFill;
 #[derive(Component)]
 pub struct EarthGlobeMaterial;
 
+/// Cloud shell faded by `nightglow_visibility` so it does not hide night lights.
+#[derive(Component)]
+pub struct EarthCloudsMaterial;
+
 /// Atmosphere whose [`GlobalTransform`] is the planet center (Earth).
 #[derive(Component)]
 pub struct OrbitalAtmosphere;
@@ -404,7 +408,7 @@ fn tag_earth_globe_material(
     names: Query<&Name>,
     mesh_materials: Query<
         &MeshMaterial3d<StandardMaterial>,
-        Without<EarthGlobeMaterial>,
+        (Without<EarthGlobeMaterial>, Without<EarthCloudsMaterial>),
     >,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut commands: Commands,
@@ -421,6 +425,10 @@ fn tag_earth_globe_material(
             .map(|n| n.as_str())
             .unwrap_or("");
         if name.contains("Cloud") {
+            if let Some(mut material) = materials.get_mut(&handle.0) {
+                material.alpha_mode = AlphaMode::Blend;
+            }
+            commands.entity(descendant).insert(EarthCloudsMaterial);
             continue;
         }
         if let Some(mut material) = materials.get_mut(&handle.0) {

@@ -11,14 +11,17 @@ use std::f32::consts::TAU;
 use crate::app::SimClock;
 use crate::effects::{Emitter, INTENSITY_PROPERTY, SUN_DIR_PROPERTY, VIEW_POS_PROPERTY};
 use crate::render::{
-    EarthGlobeMaterial, EarthRoot, Earthshine, MainCamera, NightGlobeFill, SceneSun, SkyRoot,
+    EarthCloudsMaterial, EarthGlobeMaterial, EarthRoot, Earthshine, MainCamera, NightGlobeFill,
+    SceneSun, SkyRoot,
 };
 use crate::scene::SceneConfig;
 
 /// Night-peak skybox brightness (cd/m²). Zero at noon via `star_visibility`.
 const SKYBOX_NIGHT_BRIGHTNESS: f32 = 1000.0;
-/// Dim globe city-light emissive so Hanabi still owns the bloom cores.
-const EARTH_EMISSIVE_NIGHT: f32 = 1.6;
+/// Globe city-light emissive. Noon is black via `star_visibility`.
+const EARTH_EMISSIVE_NIGHT: f32 = 120.0;
+/// Cloud opacity at midnight (`nightglow_visibility` = 1). Full through dusk.
+const CLOUD_NIGHT_ALPHA: f32 = 0.05;
 
 pub struct OrbitPlugin;
 
@@ -89,6 +92,7 @@ fn apply_orbit_properties(
     mut skybox: Query<&mut Skybox, With<MainCamera>>,
     sky_root: Query<&Transform, (With<SkyRoot>, Without<EarthRoot>)>,
     globe_mats: Query<&MeshMaterial3d<StandardMaterial>, With<EarthGlobeMaterial>>,
+    cloud_mats: Query<&MeshMaterial3d<StandardMaterial>, With<EarthCloudsMaterial>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     emitters: Query<(Entity, &Emitter, Option<&mut EffectProperties>)>,
     capturing: Option<Res<crate::capture::CaptureConfig>>,
@@ -142,6 +146,13 @@ fn apply_orbit_properties(
     for handle in &globe_mats {
         if let Some(mut material) = materials.get_mut(&handle.0) {
             material.emissive = emissive;
+        }
+    }
+
+    let cloud_alpha = 1.0 - (1.0 - CLOUD_NIGHT_ALPHA) * nightglow_vis;
+    for handle in &cloud_mats {
+        if let Some(mut material) = materials.get_mut(&handle.0) {
+            material.base_color = material.base_color.with_alpha(cloud_alpha);
         }
     }
 

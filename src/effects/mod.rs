@@ -7,6 +7,7 @@
 //! server; on reload the instance is recompiled and its material rebound.
 
 pub mod builders;
+pub mod city_tile_cdf;
 pub mod sphere_map;
 
 use bevy::camera::visibility::NoFrustumCulling;
@@ -80,6 +81,7 @@ impl Plugin for EmitterPlugin {
         {
             let registry = app.world_mut().resource::<AppTypeRegistry>().clone();
             sphere_map::register(&registry);
+            city_tile_cdf::register(&registry);
         }
         app.insert_resource(ShowEmitterGizmos(true))
             .init_resource::<EmittersReady>()

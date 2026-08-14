@@ -68,6 +68,7 @@ pub fn generate(args: &GenEffectsArgs) -> anyhow::Result<()> {
     let type_registry = AppTypeRegistry::new_with_derived_types();
     register_modifiers(&type_registry);
     crate::effects::sphere_map::register(&type_registry);
+    crate::effects::city_tile_cdf::register(&type_registry);
     let registry = type_registry.read();
 
     for (project, name, effect) in builtin_effects() {
@@ -1579,7 +1580,13 @@ fn city_lights() -> EffectAsset {
     let _view_pos = writer.add_property("view_pos", Vec3::new(0.0, 6_778_140.0, 0.0).into());
     let intensity = writer.add_property("intensity", 0.0f32.into());
 
-    let init_pos = earth_shell(&writer, EARTH_R + 8_000.0);
+    let cdf_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets/textures/earth/city_tile_cdf.bin");
+    let init_pos = crate::effects::city_tile_cdf::CityTileCdfModifier::from_bin(
+        &cdf_path,
+        EARTH_R + 8_000.0,
+    )
+    .unwrap_or_else(|err| panic!("city_tile_cdf.bin ({cdf_path:?}): {err}"));
     let init_vel = init_zero_velocity(&writer);
     // Geography is the Black Marble sample. Tiny mag jitter only — wide mag
     // packed into 8-bit COLOR was the limb sparkle.
@@ -1625,8 +1632,8 @@ fn city_lights() -> EffectAsset {
     })
     .render(crate::effects::sphere_map::SphereMapColorModifier {
         texture_slot: 1,
-        hdr_boost: 12.0,
-        luma_kill: 0.08,
+        hdr_boost: 1.0,
+        luma_kill: 0.06,
     })
     .render(ColorOverLifetimeModifier {
         gradient: color,

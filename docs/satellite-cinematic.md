@@ -66,7 +66,7 @@ applies it. Stars sized in “pixels” at 15,000 km are invisible. Use world me
 | `stars_dim` | sky | ~800k | Uniform sphere, radius 1.5e7 m. Power-law magnitude. |
 | `stars_bright` | sky | ~40k | Same sphere, larger/hotter, some color temp. Bloom bait. |
 | `milky_way` | sky | ~400k | Same sphere, keep a band near a galactic plane. Warmer, dusty. |
-| `city_lights` | earth | ~1.5M | Shell at `R+8 km` (in front of the globe for reverse-Z). Sample `textures/earth/night.jpg`; dark texels get alpha 0. |
+| `city_lights` | earth | ~1.5M | Inverse-CDF on the 128×64 night-tile map, then `R+8 km`. Color from `night.jpg`; `luma_kill` drops leftover ocean. |
 | `airglow_green` | earth | ~520k | Shell at `R+95 km`. Tight limb × night. Intensity ramps after the terminator. |
 | `airglow_red` | earth | ~340k | Shell at `R+150 km`, a faint red/orange whisper above the green. |
 
@@ -75,12 +75,13 @@ Dim via the `intensity` / `sun_dir` **property**. Authored defaults are
 noon-safe (`intensity = 0`, `sun_dir = +Y`) so a missed write does not paint
 airglow on the day stills. `orbit.rs` owns sky/earth intensity after spawn.
 
-**City geography:** NoneCG night lights as `assets/textures/earth/night.jpg`
-(same pixels as the globe emissive). Hanabi’s `TextureSampleExpr` is
-compute-init; material images are fragment-only. `SphereMapColorModifier`
-samples `textureSampleLevel` (no derivatives) and multiplies RGB × boost, with
-`alpha *= step(luma_kill, luma)`. Do not fake cities with noise. The mesh
-emissive is a dim base (`star_visibility × 1.6`); particles own the bloom.
+**City geography:** NoneCG 32K night lights, downsampled to
+`assets/textures/earth/night.jpg` (same pixels as the globe emissive). Init
+cannot bind that texture, so `CityTileCdfModifier` embeds a 128×64 tile CDF
+and inverse-CDF-spawns onto the lights. `SphereMapColorModifier` still
+samples `textureSampleLevel` for color, with `alpha *= step(luma_kill, luma)`.
+Do not fake cities with noise. The mesh emissive is the continuous sheet
+(`star_visibility × 120`); particles are the sparkle on those same places.
 
 Capture waits for `EffectMaterial` images, Earth material textures, and the
 skybox cube view — not just `.effect` assets or a spawned mesh.
