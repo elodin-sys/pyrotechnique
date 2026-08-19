@@ -1,8 +1,12 @@
 //! Environment: HDR camera, procedural atmosphere, sun, ground, Earth, sky.
 
+use bevy::asset::RenderAssetUsages;
 use bevy::camera::visibility::{NoFrustumCulling, RenderLayers};
 use bevy::camera::{ClearColorConfig, Exposure, Hdr};
 use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::image::{
+    ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
+};
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::{Atmosphere, GlobalAmbientLight, Skybox, SunDisk};
 use bevy::pbr::{AtmosphereMode, AtmosphereSettings};
@@ -58,6 +62,33 @@ pub struct OrbitalAtmosphere;
 /// True once the Earth GLB has mesh descendants (or the scene has no Earth).
 #[derive(Resource, Default)]
 pub struct EarthReady(pub bool);
+
+pub(crate) fn earth_map_sampler() -> ImageSamplerDescriptor {
+    ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::Repeat,
+        address_mode_v: ImageAddressMode::ClampToEdge,
+        mag_filter: ImageFilterMode::Linear,
+        min_filter: ImageFilterMode::Linear,
+        mipmap_filter: ImageFilterMode::Linear,
+        anisotropy_clamp: 8,
+        ..default()
+    }
+}
+
+pub(crate) fn load_earth_map(
+    asset_server: &AssetServer,
+    path: &'static str,
+    srgb: bool,
+) -> Handle<Image> {
+    asset_server
+        .load_builder()
+        .with_settings(move |settings: &mut ImageLoaderSettings| {
+            settings.is_srgb = srgb;
+            settings.sampler = ImageSampler::Descriptor(earth_map_sampler());
+            settings.asset_usage = RenderAssetUsages::RENDER_WORLD;
+        })
+        .load(path)
+}
 
 /// Scene directional sun (child of [`SkyRoot`]).
 #[derive(Component)]
@@ -432,6 +463,7 @@ fn tag_earth_globe_material(
         (Without<EarthGlobeMaterial>, Without<EarthCloudsMaterial>),
     >,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
     mut commands: Commands,
 ) {
     let Ok(root) = earth.single() else {
@@ -447,13 +479,28 @@ fn tag_earth_globe_material(
             .unwrap_or("");
         if name.contains("Cloud") {
             if let Some(mut material) = materials.get_mut(&handle.0) {
+                material.base_color = Color::WHITE;
+                material.base_color_texture =
+                    Some(load_earth_map(&asset_server, "textures/earth/clouds.ktx2", true));
                 material.alpha_mode = AlphaMode::Blend;
             }
             commands.entity(descendant).insert(EarthCloudsMaterial);
             continue;
         }
         if let Some(mut material) = materials.get_mut(&handle.0) {
-            material.emissive = LinearRgba::BLACK;
+            material.base_color = Color::WHITE;
+            material.base_color_texture =
+                Some(load_earth_map(&asset_server, "textures/earth/color.ktx2", true));
+            material.emissive = LinearRgba::WHITE;
+            material.emissive_texture =
+                Some(load_earth_map(&asset_server, "textures/earth/night.ktx2", true));
+            material.normal_map_texture =
+                Some(load_earth_map(&asset_server, "textures/earth/normal.ktx2", false));
+            material.metallic_roughness_texture = Some(load_earth_map(
+                &asset_server,
+                "textures/earth/metallic_roughness.ktx2",
+                false,
+            ));
         }
         commands.entity(descendant).insert(EarthGlobeMaterial);
     }

@@ -17,7 +17,7 @@ use bevy_hanabi::{
 };
 
 use crate::app::SimClock;
-use crate::render::{EarthRoot, SkyRoot};
+use crate::render::{load_earth_map, EarthRoot, SkyRoot};
 use crate::rocket::RocketRoot;
 use crate::scene::{EmitterConfig, SceneConfig};
 
@@ -237,7 +237,7 @@ pub fn emitter_transform(config: &EmitterConfig) -> Transform {
 fn slot_image(name: &str, asset_server: &AssetServer) -> Handle<Image> {
     match name {
         "smoke" => asset_server.load("textures/smoke_puff.png"),
-        "night" => asset_server.load("textures/earth/night.jpg"),
+        "night" => load_earth_map(asset_server, "textures/earth/night.ktx2", true),
         "veil" => asset_server.load("textures/glow_veil.png"),
         // "mask" and anything unknown get the soft round falloff.
         _ => asset_server.load("textures/soft_circle.png"),

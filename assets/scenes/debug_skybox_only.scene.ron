@@ -1,0 +1,64 @@
+// Isolate the Milky Way cubemap: satellite lighting, zero Hanabi emitters.
+// Hanabi stars hide skybox brightness regressions; this scene is the only
+// view where the cubemap is the sole sky.
+SceneConfig(
+    model: ModelConfig(
+        path: "models/oresat-low.glb",
+        target_height: 5.4,
+    ),
+    environment: EnvironmentConfig(
+        sun_azimuth_deg: 25.0,
+        sun_elevation_deg: 52.0,
+        sun_illuminance: 100000.0,
+        exposure_ev100: 13.5,
+        bloom_intensity: 0.26,
+        ground_radius: 0.0,
+        ground_color: (0.0, 0.0, 0.0),
+        atmosphere: true,
+        camera_near: 0.08,
+        camera_far: 20000000.0,
+        earth: Some(EarthConfig(
+            path: "models/earth_v5.glb",
+            altitude_m: 400000.0,
+            radius_m: 6378140.0,
+            rotation_deg: (30.0, 31.0, 0.0),
+        )),
+        atmosphere_inner_radius: Some(6378140.0),
+        atmosphere_outer_radius: Some(6458140.0),
+        atmosphere_raymarched: true,
+        orbit_period_s: 90.0,
+        earth_spin_deg_per_orbit: 20.0,
+        night_exposure_ev100: Some(9.0),
+        earthshine_illuminance: 2500.0,
+        night_globe_illuminance: 180.0,
+        ambient_brightness: 0.0,
+        skybox: Some("skyboxes/milky_way.cubemap.ktx2"),
+    ),
+    emitters: [],
+    flight: FlightConfig(
+        align_to_velocity: false,
+        keyframes: [
+            FlightKey(t: 0.0, pos: (0.0, 0.0, 0.0)),
+            FlightKey(t: 90.0, pos: (0.0, 0.0, 0.0)),
+        ],
+    ),
+    cameras: [
+        // Zenith, tilted off +Y so `looking_at(.., Vec3::Y)` is not degenerate.
+        // Earth and craft are both behind the camera: sky is the whole frame.
+        CameraPreset(
+            name: "zenith",
+            pos: (0.0, 30.0, 0.0),
+            look_at: (0.0, 230.0, 60.0),
+            fov_deg: 55.0,
+        ),
+    ],
+    scenarios: [
+        ScenarioConfig(
+            name: "skybox",
+            camera: "zenith",
+            capture_time: 45.0,
+            reference: Some("targets/satellite/iss-night.jpg"),
+            exposure_ev100: Some(9.0),
+        ),
+    ],
+)
