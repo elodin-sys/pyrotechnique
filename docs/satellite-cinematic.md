@@ -5,7 +5,7 @@ Stars, Milky Way dust, city lights, and airglow are **Hanabi**. A cubemap
 skybox (`milky_way.cubemap.ktx2`) sits under the particles and fades with
 `star_visibility` so noon stays empty. Reference stills live in
 `targets/satellite/`. The vehicle is Elodin’s `oresat-low.glb`; Earth is
-`earth_v5.glb` (8K August + Less_Clouds). See `docs/high-res-earth.md`.
+`earth_v5.glb` (16K August + Less_Clouds). See `docs/high-res-earth.md`.
 
 The stills are ISS photography. We are not rebuilding the ISS. The job is the
 lighting those photos have: hard sun, a curved Earth filling the frame, a thin
@@ -66,7 +66,7 @@ applies it. Stars sized in “pixels” at 15,000 km are invisible. Use world me
 | `stars_dim` | sky | ~800k | Uniform sphere, radius 1.5e7 m. Power-law magnitude. |
 | `stars_bright` | sky | ~40k | Same sphere, larger/hotter, some color temp. Bloom bait. |
 | `milky_way` | sky | ~400k | Same sphere, dense near a galactic plane with a soft latitude fade. Warmer, dusty. |
-| `city_lights` | earth | ~1.5M | Inverse-CDF on the 128×64 night-tile map, then `R+8 km`. Color from `night.jpg`; `luma_kill` drops leftover ocean. |
+| `city_lights` | earth | ~1.5M | Inverse-CDF on the 128×64 night-tile map, then `R+8 km`. Color from `night.png` (16K); `luma_kill` drops leftover ocean. |
 | `airglow_green` | earth | ~520k | Shell at `R+95 km`. Tight limb × night. Intensity ramps after the terminator. |
 | `airglow_red` | earth | ~340k | Shell at `R+150 km`, a faint red/orange whisper above the green. |
 
@@ -76,7 +76,7 @@ noon-safe (`intensity = 0`, `sun_dir = +Y`) so a missed write does not paint
 airglow on the day stills. `orbit.rs` owns sky/earth intensity after spawn.
 
 **City geography:** NoneCG 32K night lights, downsampled to
-`assets/textures/earth/night.jpg` (same pixels as the globe emissive). Init
+`assets/textures/earth/night.png` (same pixels as the globe emissive). Init
 cannot bind that texture, so `CityTileCdfModifier` embeds a 128×64 tile CDF
 and inverse-CDF-spawns onto the lights. `SphereMapColorModifier` still
 samples `textureSampleLevel` for color, with `alpha *= step(luma_kill, luma)`.
@@ -102,7 +102,7 @@ the earth / skybox files.
 | `milky-way` | ~67.5 | ~10 | `low-earth-orbit-stars-sunrise.jpeg` |
 
 Debug scenes: `debug_sat_only`, `debug_earth_only`, `debug_stars_only`,
-`debug_cities_only`.
+`debug_cities_only`, `debug_skybox_only` (cubemap alone, no emitters).
 
 ```bash
 cargo run -q -- capture --project satellite --scenario day-limb --compare auto

@@ -1,8 +1,13 @@
-"""Headless Blender: OBJ + 8K maps -> earth_v5.glb (globe + cloud shell)."""
+"""Headless Blender: OBJ -> mesh-only earth_v5.glb (globe + cloud shell).
+
+Materials keep the Earth / Clouds names so runtime adoption still works.
+Textures are bound in code from KTX2; this file is geometry + factors only.
+"""
 
 from __future__ import annotations
 
-import math
+import json
+import struct
 import sys
 from pathlib import Path
 
@@ -10,7 +15,6 @@ import bpy
 
 ROOT = Path("/Users/danieldriscoll/dual")
 OBJ = ROOT / "ai-context/high-res-earth/Earth-OBJ/Earth.obj"
-TEX = ROOT / "pyrotechnique/assets/textures/earth"
 OUT = ROOT / "pyrotechnique/assets/models/earth_v5.glb"
 
 EARTH_SCALE = 1004.906
@@ -22,30 +26,12 @@ def fail(msg: str) -> None:
     raise SystemExit(1)
 
 
-def image(path: Path, non_color: bool = False):
-    if not path.is_file():
-        fail(f"missing texture {path}")
-    img = bpy.data.images.load(str(path), check_existing=True)
-    if non_color:
-        img.colorspace_settings.name = "Non-Color"
-    return img
-
-
 def principled(mat):
     nodes = mat.node_tree.nodes
     for node in nodes:
         if node.type == "BSDF_PRINCIPLED":
             return node
     fail(f"no Principled BSDF on {mat.name}")
-
-
-def tex_node(mat, img, non_color=False):
-    nodes = mat.node_tree.nodes
-    node = nodes.new("ShaderNodeTexImage")
-    node.image = img
-    if non_color and img:
-        img.colorspace_settings.name = "Non-Color"
-    return node
 
 
 def clear_scene() -> None:
@@ -85,35 +71,24 @@ def make_clouds(earth):
 def earth_material():
     mat = bpy.data.materials.new("Earth")
     mat.use_nodes = True
+    mat.use_backface_culling = True
     bsdf = principled(mat)
-    links = mat.node_tree.links
-    color = tex_node(mat, image(TEX / "color_aug.jpg"))
-    links.new(color.outputs["Color"], bsdf.inputs["Base Color"])
-    emit = tex_node(mat, image(TEX / "night.jpg"))
-    links.new(emit.outputs["Color"], bsdf.inputs["Emission Color"])
-    bsdf.inputs["Emission Strength"].default_value = 1.0
-    rough = tex_node(mat, image(TEX / "roughness.jpg", non_color=True), non_color=True)
-    links.new(rough.outputs["Color"], bsdf.inputs["Roughness"])
+    bsdf.inputs["Base Color"].default_value = (0.0, 0.0, 0.0, 1.0)
     bsdf.inputs["Metallic"].default_value = 0.0
-    normal_tex = tex_node(mat, image(TEX / "normal.png", non_color=True), non_color=True)
-    normal_map = mat.node_tree.nodes.new("ShaderNodeNormalMap")
-    links.new(normal_tex.outputs["Color"], normal_map.inputs["Color"])
-    links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
+    bsdf.inputs["Emission Strength"].default_value = 0.0
     return mat
 
 
 def clouds_material():
     mat = bpy.data.materials.new("Clouds")
     mat.use_nodes = True
+    mat.use_backface_culling = True
     mat.blend_method = "BLEND"
     if hasattr(mat, "shadow_method"):
         mat.shadow_method = "NONE"
     bsdf = principled(mat)
-    links = mat.node_tree.links
-    color = tex_node(mat, image(TEX / "clouds_color.jpg"))
-    alpha = tex_node(mat, image(TEX / "clouds_alpha.jpg", non_color=True), non_color=True)
-    links.new(color.outputs["Color"], bsdf.inputs["Base Color"])
-    links.new(alpha.outputs["Color"], bsdf.inputs["Alpha"])
+    bsdf.inputs["Base Color"].default_value = (1.0, 1.0, 1.0, 0.0)
+    bsdf.inputs["Alpha"].default_value = 0.0
     bsdf.inputs["Metallic"].default_value = 0.0
     bsdf.inputs["Roughness"].default_value = 0.95
     bsdf.inputs["Emission Strength"].default_value = 0.0
@@ -146,6 +121,17 @@ def export_glb():
     print(f"wrote {OUT} ({OUT.stat().st_size / 1e6:.1f} MB)")
 
 
+def assert_no_images() -> None:
+    data = OUT.read_bytes()
+    json_len, _ = struct.unpack_from("<I4s", data, 12)
+    gltf = json.loads(data[20 : 20 + json_len])
+    images = gltf.get("images", [])
+    names = [img.get("name", "?") for img in images]
+    if images:
+        fail(f"expected mesh-only GLB, found {len(images)} images: {names}")
+    print(f"  mesh-only OK ({OUT.stat().st_size / 1e6:.1f} MB, 0 images)")
+
+
 def main():
     clear_scene()
     earth = import_earth()
@@ -155,6 +141,7 @@ def main():
     print(f"earth scale {tuple(earth.scale)} clouds scale {tuple(clouds.scale)}")
     print(f"earth verts {len(earth.data.vertices)} clouds verts {len(clouds.data.vertices)}")
     export_glb()
+    assert_no_images()
 
 
 if __name__ == "__main__":

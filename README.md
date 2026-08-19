@@ -54,6 +54,14 @@ picker and works with `--project <name>`.
 
 ## Quick start
 
+This repository uses [Git LFS](https://git-lfs.com/) for GLB and KTX2 runtime
+assets. Install Git LFS, then initialize it and download the assets:
+
+```bash
+git lfs install
+git lfs pull
+```
+
 ```bash
 # Interactive editor (falcon9 by default)
 cargo run
@@ -271,7 +279,7 @@ src/
 assets/
 ├── effects/<project>/   *.effect (Hanabi RON) — the tunable artifacts
 ├── scenes/              <project>.scene.ron (+ debug variants)
-├── textures/            sprites + textures/earth/ (8K night for Hanabi)
+├── textures/            sprites + textures/earth/ (16K night.png for Hanabi)
 ├── skyboxes/            milky_way.cubemap.ktx2
 └── models/              vehicle GLBs + earth_v5.glb
 targets/<project>/       reference images

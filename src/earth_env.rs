@@ -16,7 +16,9 @@ use crate::render::{
 use crate::rocket::RocketRoot;
 use crate::scene::SceneConfig;
 
-const SKYBOX_NIGHT_BRIGHTNESS: f32 = 1000.0;
+/// The Milky Way master is a dim exposure (mean 3/255, dust p99 37/255), so
+/// this gain — not the texture — sets how much band survives tonemapping.
+const SKYBOX_NIGHT_BRIGHTNESS: f32 = 4000.0;
 const EARTH_EMISSIVE_NIGHT: f32 = 120.0;
 const CLOUD_NIGHT_ALPHA: f32 = 0.05;
 const SPACE_VIS_START_M: f32 = 20_000.0;

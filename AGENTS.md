@@ -37,7 +37,10 @@ Scenarios — falcon9: `lift-off`, `ascent`, `max-q`, `mid-flight`,
 boost): `initial-boost`, `mid-boost`, `late-boost`. satellite: `day-limb`,
 `day-look-down`, `dusk-terminator`, `night-airglow`, `night-cities`,
 `starboard`, `milky-way`. Debug isolates: `debug_sat_only`,
-`debug_earth_only`, `debug_stars_only`, `debug_cities_only`.
+`debug_earth_only`, `debug_stars_only`, `debug_cities_only`,
+`debug_skybox_only` (cubemap with zero emitters — the Hanabi stars hide
+skybox brightness regressions, so judge the cubemap only here; use
+`--time 22.5` or `67.5` to put the galactic band in frame).
 
 Useful flags: `--time <s>` (override capture time), `--seed <n>`, `--size WxH`,
 `--fps <hz>`, `--out <path>`. `--project` also selects debug scenes (e.g.
@@ -131,7 +134,7 @@ Earth is `earth_v5.glb`. Skybox brightness is 0 at noon.
 | Effect | Attach | Role |
 |---|---|---|
 | `stars_dim` / `stars_bright` / `milky_way` | sky | Pinpricks on a 15e6 m sphere. Hanabi 0.20 ignores `screen_space_size`; sizes are world metres via `star_world_size` in builders. Cubemap under them (`skyboxes/milky_way.cubemap.ktx2`). |
-| `city_lights` | earth | Shell at `R+8 km` (in front of the globe for reverse-Z). Fragment `SphereMapColorModifier` samples `textures/earth/night.jpg`. Init/update **cannot** bind material images. |
+| `city_lights` | earth | Shell at `R+8 km` (in front of the globe for reverse-Z). Fragment `SphereMapColorModifier` samples `textures/earth/night.ktx2` (16K UASTC). Init/update **cannot** bind material images. |
 | `airglow_green` / `airglow_red` | earth | Shells at 95 km / 150 km. Limb term uses `view_pos`; night via `sun_dir`. `intensity` ramps **after** the terminator (stars/cities use the dusk curve). |
 
 HDR ballpark: dim stars ~10–20×, bright ~40–60×, city cores ~8–25× after the map, airglow ~3–8× at low alpha. Day EV100 ~13.5, night ~8–10.
@@ -235,7 +238,7 @@ intensity from live sim telemetry. Porting rules that affect authoring here:
   capacity and dim through the `intensity` property. `activity` timelines
   are authoring stand-ins for sim viz channels and are not ported.
 - **Texture slots bind by name** in both tools: `smoke` -> smoke_puff sprite,
-  `mask`/other -> soft circle, `night` -> `textures/earth/night.jpg`.
+  `mask`/other -> soft circle, `night` -> `textures/earth/night.ktx2`.
 
 Full checklist in `README.md` ("Elodin port path"); design record in
 `../docs/design-thruster-effects-port.md`; Elodin internals in

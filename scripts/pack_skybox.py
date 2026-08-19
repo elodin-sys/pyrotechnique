@@ -24,7 +24,12 @@ SRC = Path(
 OUT = Path(
     "/Users/danieldriscoll/dual/pyrotechnique/assets/skyboxes/milky_way.cubemap.ktx2"
 )
-FACE = 2048
+# 4096 = 1:1 sampling from the 16K equirect (16384 / 4 faces per ring).
+FACE = 4096
+# The master carries a dim veil (~1-8/255) across empty sky. The runtime gain
+# needed to make the band read (SKYBOX_NIGHT_BRIGHTNESS) also multiplies that
+# veil into grey haze, so zero it here and let the gain lift only real signal.
+VEIL_BLACK_POINT = 8.0
 
 
 def face_directions(face: int, face_size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -69,6 +74,17 @@ def sample_equirect(src: np.ndarray, dx: np.ndarray, dy: np.ndarray, dz: np.ndar
     return np.clip(top * (1.0 - ty) + bottom * ty, 0, 255).astype(np.uint8)
 
 
+def crush_veil(path: Path, out_dir: Path) -> Path:
+    """Scale each pixel by its luma headroom above the veil, preserving hue."""
+    out = out_dir / path.name
+    arr = np.asarray(Image.open(path).convert("RGB"), dtype=np.float32)
+    luma = arr[..., 0] * 0.3 + arr[..., 1] * 0.6 + arr[..., 2] * 0.1
+    gain = np.clip((luma - VEIL_BLACK_POINT) / np.maximum(luma, 1e-3), 0.0, 1.0)
+    crushed = np.clip(arr * gain[..., None], 0, 255).astype(np.uint8)
+    Image.fromarray(crushed, mode="RGB").save(out, "PNG")
+    return out
+
+
 def resolve_toktx() -> str:
     env = os.environ.get("TOKTX")
     if env:
@@ -90,7 +106,7 @@ def main() -> int:
         return 1
     toktx = resolve_toktx()
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    cache = Path("/tmp/pyro-skybox-faces")
+    cache = Path(f"/tmp/pyro-skybox-faces-{FACE}")
     cache.mkdir(parents=True, exist_ok=True)
     need = [face for face in range(6) if not (cache / f"face{face}.png").is_file()]
     src = None
@@ -108,6 +124,11 @@ def main() -> int:
             pixels = sample_equirect(src, dx, dy, dz)
             Image.fromarray(pixels, mode="RGB").save(path, "PNG")
         face_paths.append(path)
+
+    crushed = Path(f"/tmp/pyro-skybox-crushed-{FACE}-{VEIL_BLACK_POINT:g}")
+    crushed.mkdir(parents=True, exist_ok=True)
+    print(f"crush veil below {VEIL_BLACK_POINT:g}/255 -> {crushed}", flush=True)
+    face_paths = [crush_veil(path, crushed) for path in face_paths]
 
     cmd = [
         toktx,

@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1"
-bevy = { version = "0.19", features = ["jpeg", "webp", "ktx2", "basis-universal", "file_watcher"] }
+bevy = { version = "0.19", features = ["jpeg", "webp", "ktx2", "basis-universal", "file_watcher", "zstd_c"] }
 bevy_egui = "0.40"
 bevy_hanabi = { version = "0.20.0-dev", default-features = false, features = ["3d"] }
 bevy_panorbit_camera = { version = "0.35", features = ["bevy_egui"] }
