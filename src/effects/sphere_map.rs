@@ -53,6 +53,7 @@ impl Modifier for SphereMapColorModifier {
         Err(ExprError::InvalidModifierContext(
             context.modifier_context(),
             ModifierContext::Render,
+            "",
         ))
     }
 }

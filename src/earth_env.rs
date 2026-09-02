@@ -372,7 +372,11 @@ fn tune_earth_environment(
         if let Some(mut material) = materials.get_mut(&handle.0) {
             let c = env.ground_color;
             material.base_color = Color::srgba(c[0], c[1], c[2], fade);
-            material.alpha_mode = AlphaMode::Blend;
+            material.alpha_mode = if fade >= 1.0 {
+                AlphaMode::Opaque
+            } else {
+                AlphaMode::Blend
+            };
         }
     }
 }

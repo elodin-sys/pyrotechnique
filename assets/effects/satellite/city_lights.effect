@@ -8255,7 +8255,7 @@
     },
     {
       "bevy_hanabi::modifier::output::ParticleTextureModifier": (
-        texture_slot: "#25",
+        texture_slot: 0,
         sample_mapping: ModulateOpacityFromR,
       ),
     },
@@ -8391,9 +8391,11 @@
       layout: [
         (
           name: "veil",
+          dimension: r#2d,
         ),
         (
           name: "night",
+          dimension: r#2d,
         ),
       ],
     ),

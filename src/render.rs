@@ -330,7 +330,8 @@ fn ensure_environment(
                 base_color: Color::srgba(c[0], c[1], c[2], 1.0),
                 perceptual_roughness: 1.0,
                 metallic: 0.0,
-                alpha_mode: AlphaMode::Blend,
+                // Opaque writes depth so Hanabi particles are not sorted against a 20 km disc.
+                alpha_mode: AlphaMode::Opaque,
                 ..default()
             })),
             Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),

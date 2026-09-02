@@ -69,7 +69,7 @@
     },
     {
       "bevy_hanabi::modifier::output::ParticleTextureModifier": (
-        texture_slot: "#19",
+        texture_slot: 0,
         sample_mapping: ModulateOpacityFromR,
       ),
     },
@@ -179,6 +179,7 @@
       layout: [
         (
           name: "mask",
+          dimension: r#2d,
         ),
       ],
     ),

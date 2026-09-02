@@ -254,9 +254,8 @@ fn merlin_core() -> EffectAsset {
     size.add_key(0.4, Vec3::new(6.0, 1.4, 1.4));
     size.add_key(1.0, Vec3::new(3.0, 0.75, 0.75));
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(16384, SpawnerSettings::rate(2200.0.into()), module)
         .with_name("merlin_core")
@@ -270,7 +269,7 @@ fn merlin_core() -> EffectAsset {
         .update(drag)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -339,9 +338,8 @@ fn merlin_flame() -> EffectAsset {
     size.add_key(0.35, Vec3::new(8.5, 2.9, 2.9));
     size.add_key(1.0, Vec3::new(5.5, 2.0, 2.0));
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(16384, SpawnerSettings::rate(1900.0.into()), module)
         .with_name("merlin_flame")
@@ -355,7 +353,7 @@ fn merlin_flame() -> EffectAsset {
         .update(drag)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -466,9 +464,8 @@ fn exhaust_smoke() -> EffectAsset {
     size.add_key(0.45, Vec3::splat(170.0));
     size.add_key(1.0, Vec3::splat(540.0));
 
-    let smoke_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("smoke");
+    module.add_texture_slot("smoke", SlotDimension::D2);
 
     EffectAsset::new(65536, SpawnerSettings::rate(220.0.into()), module)
         .with_name("exhaust_smoke")
@@ -484,7 +481,7 @@ fn exhaust_smoke() -> EffectAsset {
         .update(accel)
         .render(OrientModifier::new(OrientMode::FaceCameraPosition))
         .render(ParticleTextureModifier {
-            texture_slot: smoke_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::Modulate,
         })
         .render(SizeOverLifetimeModifier {
@@ -566,9 +563,8 @@ fn descent_plume() -> EffectAsset {
     size.add_key(0.15, Vec3::new(1.3, 0.50, 0.50));
     size.add_key(1.0, Vec3::new(1.6, 0.58, 0.58));
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(32768, SpawnerSettings::rate(22000.0.into()), module)
         .with_name("descent_plume")
@@ -581,7 +577,7 @@ fn descent_plume() -> EffectAsset {
         .init(init_lifetime)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -643,9 +639,8 @@ fn descent_glow() -> EffectAsset {
     size.add_key(0.5, Vec3::splat(1.1));
     size.add_key(1.0, Vec3::splat(1.4));
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(4096, SpawnerSettings::rate(1800.0.into()), module)
         .with_name("descent_glow")
@@ -658,7 +653,7 @@ fn descent_glow() -> EffectAsset {
         .init(init_lifetime)
         .render(OrientModifier::new(OrientMode::FaceCameraPosition))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -704,9 +699,8 @@ fn rcs_dart() -> EffectAsset {
     size.add_key(0.4, Vec3::new(3.2, 0.85, 0.85));
     size.add_key(1.0, Vec3::new(2.2, 0.6, 0.6));
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(4096, SpawnerSettings::rate(1200.0.into()), module)
         .with_name("rcs_dart")
@@ -718,7 +712,7 @@ fn rcs_dart() -> EffectAsset {
         .init(init_lifetime)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -764,9 +758,8 @@ fn rcs_puff() -> EffectAsset {
     size.add_key(0.4, Vec3::new(0.8, 0.21, 0.21));
     size.add_key(1.0, Vec3::new(0.57, 0.16, 0.16));
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(4096, SpawnerSettings::rate(600.0.into()), module)
         .with_name("rcs_puff")
@@ -778,7 +771,7 @@ fn rcs_puff() -> EffectAsset {
         .init(init_lifetime)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -851,9 +844,8 @@ fn ground_dust() -> EffectAsset {
     size.add_key(0.4, Vec3::new(1.6, 0.21, 0.21));
     size.add_key(1.0, Vec3::new(2.3, 0.32, 0.32));
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     // Local space on a static emitter == world-fixed (see doc comment).
     EffectAsset::new(32768, SpawnerSettings::rate(4000.0.into()), module)
@@ -870,7 +862,7 @@ fn ground_dust() -> EffectAsset {
         .update(kill_ground)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -939,9 +931,8 @@ fn motor_core() -> EffectAsset {
     size.add_key(0.4, Vec3::new(0.45, 0.115, 0.115));
     size.add_key(1.0, Vec3::new(0.22, 0.06, 0.06));
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(4096, SpawnerSettings::rate(3200.0.into()), module)
         .with_name("motor_core")
@@ -955,7 +946,7 @@ fn motor_core() -> EffectAsset {
         .update(drag)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -1019,9 +1010,8 @@ fn motor_flame() -> EffectAsset {
     size.add_key(0.35, Vec3::new(0.55, 0.24, 0.24));
     size.add_key(1.0, Vec3::new(0.38, 0.16, 0.16));
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(4096, SpawnerSettings::rate(2600.0.into()), module)
         .with_name("motor_flame")
@@ -1035,7 +1025,7 @@ fn motor_flame() -> EffectAsset {
         .update(drag)
         .render(OrientModifier::new(OrientMode::AlongVelocity))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -1113,9 +1103,8 @@ fn boost_trail() -> EffectAsset {
     size.add_key(0.45, Vec3::splat(10.0));
     size.add_key(1.0, Vec3::splat(20.0));
 
-    let smoke_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("smoke");
+    module.add_texture_slot("smoke", SlotDimension::D2);
 
     EffectAsset::new(65536, SpawnerSettings::rate(560.0.into()), module)
         .with_name("boost_trail")
@@ -1131,7 +1120,7 @@ fn boost_trail() -> EffectAsset {
         .update(accel)
         .render(OrientModifier::new(OrientMode::FaceCameraPosition))
         .render(ParticleTextureModifier {
-            texture_slot: smoke_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::Modulate,
         })
         .render(SizeOverLifetimeModifier {
@@ -1201,9 +1190,8 @@ fn launch_smoke() -> EffectAsset {
     size.add_key(0.5, Vec3::splat(9.5));
     size.add_key(1.0, Vec3::splat(14.0));
 
-    let smoke_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("smoke");
+    module.add_texture_slot("smoke", SlotDimension::D2);
 
     // Local space on a static emitter == world-fixed (see doc comment).
     EffectAsset::new(4096, SpawnerSettings::rate(130.0.into()), module)
@@ -1221,7 +1209,7 @@ fn launch_smoke() -> EffectAsset {
         .update(kill_ground)
         .render(OrientModifier::new(OrientMode::FaceCameraPosition))
         .render(ParticleTextureModifier {
-            texture_slot: smoke_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::Modulate,
         })
         .render(SizeOverLifetimeModifier {
@@ -1297,9 +1285,8 @@ fn pad_smoke() -> EffectAsset {
     size.add_key(0.6, Vec3::splat(80.0));
     size.add_key(1.0, Vec3::splat(110.0));
 
-    let smoke_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("smoke");
+    module.add_texture_slot("smoke", SlotDimension::D2);
 
     // Local space on a static emitter == world-fixed (see doc comment).
     EffectAsset::new(32768, SpawnerSettings::rate(90.0.into()), module)
@@ -1317,7 +1304,7 @@ fn pad_smoke() -> EffectAsset {
         .update(kill_ground)
         .render(OrientModifier::new(OrientMode::FaceCameraPosition))
         .render(ParticleTextureModifier {
-            texture_slot: smoke_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::Modulate,
         })
         .render(SizeOverLifetimeModifier {
@@ -1462,9 +1449,8 @@ fn star_field(
     color.add_key(0.0, hdr);
     color.add_key(1.0, hdr);
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(capacity, SpawnerSettings::once(count.into()), module)
         .with_name(name)
@@ -1480,7 +1466,7 @@ fn star_field(
         .update(update_color)
         .render(OrientModifier::new(OrientMode::FaceCameraPosition))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -1548,9 +1534,8 @@ fn milky_way() -> EffectAsset {
     color.add_key(0.0, hdr);
     color.add_key(1.0, hdr);
 
-    let mask_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("mask");
+    module.add_texture_slot("mask", SlotDimension::D2);
 
     EffectAsset::new(400_000, SpawnerSettings::once(400_000.0.into()), module)
         .with_name("milky_way")
@@ -1565,7 +1550,7 @@ fn milky_way() -> EffectAsset {
         .update(update_color)
         .render(OrientModifier::new(OrientMode::FaceCameraPosition))
         .render(ParticleTextureModifier {
-            texture_slot: mask_slot,
+            texture_slot: 0,
             sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
         })
         .render(SizeOverLifetimeModifier {
@@ -1610,10 +1595,9 @@ fn city_lights() -> EffectAsset {
     color.add_key(0.0, hdr);
     color.add_key(1.0, hdr);
 
-    let veil_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("veil");
-    module.add_texture_slot("night");
+    module.add_texture_slot("veil", SlotDimension::D2);
+    module.add_texture_slot("night", SlotDimension::D2);
 
     EffectAsset::new(
         1_500_000,
@@ -1632,7 +1616,7 @@ fn city_lights() -> EffectAsset {
     .update(update_color)
     .render(OrientModifier::new(OrientMode::FaceCameraPosition))
     .render(ParticleTextureModifier {
-        texture_slot: veil_slot,
+        texture_slot: 0,
         sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
     })
     .render(crate::effects::sphere_map::SphereMapColorModifier {
@@ -1694,9 +1678,8 @@ fn airglow_shell(
     color.add_key(0.0, hdr);
     color.add_key(1.0, hdr);
 
-    let veil_slot = writer.lit(0u32).expr();
     let mut module = writer.finish();
-    module.add_texture_slot("veil");
+    module.add_texture_slot("veil", SlotDimension::D2);
 
     EffectAsset::new(
         capacity,
@@ -1716,7 +1699,7 @@ fn airglow_shell(
     .update(update_color)
     .render(OrientModifier::new(OrientMode::FaceCameraPosition))
     .render(ParticleTextureModifier {
-        texture_slot: veil_slot,
+        texture_slot: 0,
         sample_mapping: ImageSampleMapping::ModulateOpacityFromR,
     })
     .render(SizeOverLifetimeModifier {
